@@ -1,10 +1,12 @@
 import {
   Component,
-  OnInit,
   ChangeDetectorRef,
   OnDestroy,
   AfterViewInit,
+  OnInit,
   AfterViewChecked,
+  ViewChild,
+  ElementRef,
 } from "@angular/core";
 import { Subscription } from "rxjs";
 import { Store } from "@ngrx/store";
@@ -17,37 +19,44 @@ import {
   PageChangeEvent,
   CheckboxEvent,
 } from "shared/modules/table/table.component";
-import { selectIsLoading, selectIsLoggedIn } from "state-management/selectors/user.selectors";
-import { Job, UserApi } from "shared/sdk";
+import {
+  selectIsLoading,
+  selectIsLoggedIn,
+} from "state-management/selectors/user.selectors";
+import {
+  CreateUserJWT,
+  UsersService,
+  CreateJobDtoV3,
+} from "@scicatproject/scicat-sdk-ts-angular";
 import { FileSizePipe } from "shared/pipes/filesize.pipe";
 import { MatCheckboxChange } from "@angular/material/checkbox";
 import { MatDialog } from "@angular/material/dialog";
 import { PublicDownloadDialogComponent } from "datasets/public-download-dialog/public-download-dialog.component";
 import { submitJobAction } from "state-management/actions/jobs.actions";
 import { AppConfigService } from "app-config.service";
-
-export interface File {
-  path: string;
-  size: number;
-  time: string;
-  chk: string;
-  uid: string;
-  gid: string;
-  perm: string;
-  selected: boolean;
-}
+import { NgForm } from "@angular/forms";
+import { DataFiles_File } from "./datafiles.interfaces";
+import {
+  ActionItemDataset,
+  ActionItems,
+} from "shared/modules/configurable-actions/configurable-action.interfaces";
+import { AuthService } from "shared/services/auth/auth.service";
 
 @Component({
   selector: "datafiles",
   templateUrl: "./datafiles.component.html",
   styleUrls: ["./datafiles.component.scss"],
+  standalone: false,
 })
-export class DatafilesComponent
-  implements OnInit, OnDestroy, AfterViewInit, AfterViewChecked {
+export class DatafilesComponent implements OnDestroy, OnInit, AfterViewChecked {
+  @ViewChild("downloadAllForm") downloadAllFormElement: ElementRef<NgForm>;
+  @ViewChild("downloadSelectedForm") downloadSelectedFormElement;
   datablocks$ = this.store.select(selectCurrentOrigDatablocks);
   dataset$ = this.store.select(selectCurrentDataset);
   loading$ = this.store.select(selectIsLoading);
   isLoggedIn$ = this.store.select(selectIsLoggedIn);
+  downloadAllForm: NgForm;
+  downloadSelectedForm: NgForm;
 
   appConfig = this.appConfigService.getConfig();
 
@@ -60,9 +69,11 @@ export class DatafilesComponent
 
   subscriptions: Subscription[] = [];
 
-  files: Array<any> = [];
-  sourcefolder = "";
+  files: Array<DataFiles_File> = [];
   datasetPid = "";
+  actionItems: ActionItems = {
+    datasets: [],
+  };
 
   count = 0;
   pageSize = 25;
@@ -70,12 +81,18 @@ export class DatafilesComponent
   fileDownloadEnabled: boolean = this.appConfig.fileDownloadEnabled;
   multipleDownloadEnabled: boolean = this.appConfig.multipleDownloadEnabled;
   fileserverBaseURL: string | undefined = this.appConfig.fileserverBaseURL;
-  fileserverButtonLabel: string = this.appConfig.fileserverButtonLabel || "Download";
-  multipleDownloadAction: string | null = this.appConfig
-    .multipleDownloadAction;
+  fileserverButtonLabel: string =
+    this.appConfig.fileserverButtonLabel || "Download";
+  multipleDownloadAction: string | null = this.appConfig.multipleDownloadAction;
   maxFileSize: number | null = this.appConfig.maxDirectDownloadSize;
-  sftpHost: string | null = this.appConfig.sftpHost;
-  jwt: any;
+  sourceFolder: string =
+    this.appConfig.sourceFolder || "No source folder provided";
+  sftpHost: string = this.appConfig.sftpHost || "No sftp host provided";
+  maxFileSizeWarning: string | null =
+    this.appConfig.maxFileSizeWarning ||
+    `Some files are above the max size ${this.fileSizePipe.transform(this.maxFileSize)}`;
+  jwt: CreateUserJWT;
+  auth_token: string;
 
   tableColumns: TableColumn[] = [
     {
@@ -83,7 +100,6 @@ export class DatafilesComponent
       icon: "save",
       sort: false,
       inList: true,
-      // pipe: FilePathTruncate,
     },
     {
       name: "size",
@@ -100,15 +116,17 @@ export class DatafilesComponent
       dateFormat: "yyyy-MM-dd HH:mm",
     },
   ];
-  tableData: File[] = [];
+  tableData: DataFiles_File[] = [];
 
   constructor(
     public appConfigService: AppConfigService,
     private store: Store,
     private cdRef: ChangeDetectorRef,
     private dialog: MatDialog,
-    private userApi: UserApi
-  ) { }
+    private usersService: UsersService,
+    private authService: AuthService,
+    private fileSizePipe: FileSizePipe,
+  ) {}
 
   onPageChange(event: PageChangeEvent) {
     const { pageIndex, pageSize } = event;
@@ -126,7 +144,7 @@ export class DatafilesComponent
   getIsNoneSelected() {
     return this.tableData.reduce(
       (accum, curr) => accum && !curr.selected,
-      true
+      true,
     );
   }
 
@@ -149,6 +167,18 @@ export class DatafilesComponent
   updateSelectionStatus() {
     this.areAllSelected = this.getAreAllSelected();
     this.isNoneSelected = this.getIsNoneSelected();
+    this.updateSelectedInFiles();
+  }
+
+  updateSelectedInFiles() {
+    const selected = this.tableData
+      .filter((item) => item.selected)
+      .map((item) => item.path);
+    const files = this.files.map((item) => {
+      item.selected = selected.includes(item.path);
+      return item;
+    });
+    this.files = [...files];
   }
 
   onSelectOne(checkboxEvent: CheckboxEvent) {
@@ -188,29 +218,50 @@ export class DatafilesComponent
     }
   }
 
-  ngOnInit() {
-    this.subscriptions.push(
-      this.userApi.jwt().subscribe((jwt) => {
-        this.jwt = jwt;
-      })
-    );
-  }
+  hasFileAboveMaxSizeWarning() {
+    /**
+     * Template for a file size warning message.
+     * Placeholders:
+     * - <maxDirectDownloadSize>: Maximum file size allowed (e.g., "10 MB").
+     * - <sftpHost>: SFTP host for downloading large files.
+     * - <sourceFolder>: Directory path on the SFTP host.
+     *
+     * Example usage:
+     * Some files are above <maxDirectDownloadSize>. These file can be accessed via sftp host: <sftpHost> in directory: <sourceFolder>
+     */
 
-  ngAfterViewInit() {
+    const valueMapping = {
+      sftpHost: this.sftpHost,
+      sourceFolder: this.sourceFolder,
+      maxDirectDownloadSize: this.fileSizePipe.transform(this.maxFileSize),
+    };
+
+    let warning = this.maxFileSizeWarning;
+
+    Object.keys(valueMapping).forEach((key) => {
+      warning = warning.replace(
+        "<" + key + ">",
+        `<strong>${valueMapping[key]}</strong>`,
+      );
+    });
+
+    return warning;
+  }
+  //ngAfterViewInit() {
+  ngOnInit() {
     this.subscriptions.push(
       this.dataset$.subscribe((dataset) => {
         if (dataset) {
-          this.sourcefolder = dataset.sourceFolder;
-          this.datasetPid = dataset.pid;
+          this.actionItems.datasets = <ActionItemDataset[]>[dataset];
         }
-      })
+      }),
     );
     this.subscriptions.push(
       this.datablocks$.subscribe((datablocks) => {
         if (datablocks) {
-          const files: File[] = [];
+          const files: DataFiles_File[] = [];
           datablocks.forEach((block) => {
-            block.dataFileList.map((file) => {
+            block.dataFileList.map((file: DataFiles_File) => {
               this.totalFileSize += file.size;
               file.selected = false;
               files.push(file);
@@ -220,13 +271,32 @@ export class DatafilesComponent
           this.tableData = files.slice(0, this.pageSize);
           this.files = files;
           this.tooLargeFile = this.hasTooLargeFiles(this.files);
+          this.actionItems.datasets[0].files = files;
         }
-      })
+      }),
     );
   }
 
   ngAfterViewChecked() {
     this.cdRef.detectChanges();
+  }
+
+  downloadFiles(form: "downloadAllForm" | "downloadSelectedForm") {
+    if (this.appConfig.multipleDownloadUseAuthToken) {
+      this.auth_token = `Bearer ${this.authService.getToken().id}`;
+      this[`${form}Element`].nativeElement.auth_token.value = this.auth_token;
+    }
+    if (!this.jwt) {
+      this.subscriptions.push(
+        this.usersService.usersControllerGetUserJWTV3().subscribe((jwt) => {
+          this.jwt = jwt;
+          this[`${form}Element`].nativeElement.jwt.value = jwt.jwt;
+          this[`${form}Element`].nativeElement.submit();
+        }),
+      );
+    } else {
+      this[`${form}Element`].nativeElement.submit();
+    }
   }
 
   ngOnDestroy() {
@@ -235,26 +305,32 @@ export class DatafilesComponent
   openDialog(): void {
     const dialogRef = this.dialog.open(PublicDownloadDialogComponent, {
       width: "500px",
-      data: { email: "" }
+      data: { email: "" },
     });
     dialogRef.afterClosed().subscribe((email) => {
       if (email) {
         this.getSelectedFiles();
-        const data = {
+        const data: CreateJobDtoV3 = {
           emailJobInitiator: email,
-          creationTime: new Date(),
           type: "public",
-          datasetList: [{
-            pid: this.datasetPid,
-            files: this.getSelectedFiles()
-          }]
+          jobParams: {},
+          datasetList: [
+            {
+              pid: this.datasetPid,
+              files: this.getSelectedFiles(),
+            },
+          ],
+          jobStatusMessage: "jobCreated",
         };
-        const job = new Job(data);
-        this.store.dispatch(submitJobAction({ job }));
+        this.store.dispatch(submitJobAction({ job: data }));
       }
     });
   }
   getFileTransferLink() {
-    return this.fileserverBaseURL + "&origin_path=" + encodeURIComponent(this.sourcefolder);
+    return (
+      this.fileserverBaseURL +
+      "&origin_path=" +
+      encodeURIComponent(this.sourceFolder)
+    );
   }
 }

@@ -11,6 +11,7 @@ import {
   selector: "app-add-dataset-dialog",
   templateUrl: "./add-dataset-dialog.component.html",
   styleUrls: ["./add-dataset-dialog.component.scss"],
+  standalone: false,
 })
 export class AddDatasetDialogComponent {
   form: FormGroup;
@@ -29,7 +30,7 @@ export class AddDatasetDialogComponent {
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: { userGroups: string[] },
     public dialogRef: MatDialogRef<AddDatasetDialogComponent>,
-    private fb: FormBuilder
+    private fb: FormBuilder,
   ) {
     this.form = this.fb.group({
       datasetName: this.datasetName,

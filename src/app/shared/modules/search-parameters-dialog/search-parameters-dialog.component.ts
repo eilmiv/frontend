@@ -4,25 +4,62 @@ import { MatDialogRef, MAT_DIALOG_DATA } from "@angular/material/dialog";
 import { AppConfigService } from "app-config.service";
 import { map, startWith } from "rxjs/operators";
 import { UnitsService } from "shared/services/units.service";
+import { ScientificCondition } from "../../../state-management/models";
+import { MatSnackBar } from "@angular/material/snack-bar";
+import { ConnectedPosition } from "@angular/cdk/overlay";
+
+export interface SearchParametersDialogData {
+  parameterKeys: string[];
+  usedFields: string[];
+  condition?: ScientificCondition;
+  humanNameMap?: { [key: string]: string };
+}
 
 @Component({
   selector: "search-parameters-dialog",
   templateUrl: "./search-parameters-dialog.component.html",
+  styleUrls: ["./search-parameters-dialog.component.scss"],
+  standalone: false,
 })
 export class SearchParametersDialogComponent {
   appConfig = this.appConfigService.getConfig();
   unitsEnabled = this.appConfig.scienceSearchUnitsEnabled;
-  
+
   parameterKeys = this.data.parameterKeys;
   units: string[] = [];
+  humanNameMap: { [key: string]: string } = {};
+  hoverKey: string | null = null;
+
+  overlayPositions: ConnectedPosition[] = [
+    {
+      originX: "end",
+      originY: "center",
+      overlayX: "start",
+      overlayY: "center",
+      offsetX: 8,
+    },
+    {
+      originX: "center",
+      originY: "center",
+      overlayX: "end",
+      overlayY: "top",
+      offsetY: 8,
+    },
+  ];
 
   parametersForm = new FormGroup({
-    lhs: new FormControl("", [Validators.required, Validators.minLength(2)]),
-    relation: new FormControl("GREATER_THAN", [
+    lhs: new FormControl(this.data.condition?.lhs || "", [
+      Validators.required,
+      Validators.minLength(2),
+    ]),
+    relation: new FormControl(this.data.condition?.relation || "GREATER_THAN", [
       Validators.required,
       Validators.minLength(9),
     ]),
-    rhs: new FormControl("", [Validators.required, Validators.minLength(1)]),
+    rhs: new FormControl<string | number | (string | number)[]>(
+      this.data.condition?.rhs || "",
+      [Validators.required, Validators.minLength(1)],
+    ),
     unit: new FormControl(""),
   });
 
@@ -30,34 +67,59 @@ export class SearchParametersDialogComponent {
     startWith(""),
     map((value: string) =>
       this.units.filter((unit) =>
-        unit.toLowerCase().includes(value.toLowerCase())
-      )
-    )
+        unit.toLowerCase().includes(value.toLowerCase()),
+      ),
+    ),
   );
 
   filteredKeys$ = this.parametersForm.get("lhs")?.valueChanges.pipe(
     startWith(""),
-    map((value: string) =>
-      this.parameterKeys.filter((key) =>
-        key.toLowerCase().includes(value.toLowerCase())
-      )
-    )
+    map((value: string) => {
+      const searchTerm = value.toLowerCase();
+      return this.parameterKeys.filter((key) => {
+        const keyMatches = key.toLowerCase().includes(searchTerm);
+        const humanName = this.humanNameMap[key]?.toLowerCase() || "";
+        const humanNameMatches = humanName.includes(searchTerm);
+        return keyMatches || humanNameMatches;
+      });
+    }),
   );
 
   constructor(
     public appConfigService: AppConfigService,
-    @Inject(MAT_DIALOG_DATA) public data: { parameterKeys: string[] },
+    @Inject(MAT_DIALOG_DATA)
+    public data: SearchParametersDialogData,
     public dialogRef: MatDialogRef<SearchParametersDialogComponent>,
-    private unitsService: UnitsService
-  ) {}
+    private unitsService: UnitsService,
+    private snackBar: MatSnackBar,
+  ) {
+    if (this.data.condition?.lhs) {
+      this.getUnits(this.data.condition.lhs);
+    }
+    this.humanNameMap = data.humanNameMap || {};
+  }
 
   add = (): void => {
     const { lhs, relation, unit } = this.parametersForm.value;
+
+    const metadataKey =
+      Object.keys(this.humanNameMap).find(
+        (key) => this.humanNameMap[key] === lhs,
+      ) || lhs;
+
+    if (this.data.usedFields && this.data.usedFields.includes(metadataKey)) {
+      this.snackBar.open("Field already used", "Close", {
+        duration: 2000,
+        panelClass: ["snackbar-warning"],
+      });
+      return;
+    }
+
     const rawRhs = this.parametersForm.get("rhs")?.value;
     const rhs =
       relation === "EQUAL_TO_STRING" ? String(rawRhs) : Number(rawRhs);
     this.parametersForm.patchValue({ rhs });
-    this.dialogRef.close({ data: { lhs, relation, rhs, unit } });
+    this.dialogRef.close({ data: { lhs: metadataKey, relation, rhs, unit } });
   };
 
   cancel = (): void => this.dialogRef.close();
@@ -78,20 +140,11 @@ export class SearchParametersDialogComponent {
     }
   };
 
-  isInvalid = (): boolean => {
-    const { invalid } = this.parametersForm;
-    const { lhs, relation, rhs } = this.parametersForm.value;
-
-    if (invalid) {
-      return invalid;
-    }
-    if (relation !== "EQUAL_TO_STRING" && isNaN(Number(rhs))) {
-      return true;
-    }
-    return lhs.length * rhs.length === 0;
-  };
-
   get lhs(): string {
     return this.parametersForm.get("lhs")?.value;
+  }
+
+  getHumanName(key: string): string {
+    return this.humanNameMap[key] || "";
   }
 }

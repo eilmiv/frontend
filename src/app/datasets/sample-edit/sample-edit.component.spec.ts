@@ -1,3 +1,5 @@
+/* eslint @typescript-eslint/no-empty-function:0 */
+
 import {
   ComponentFixture,
   inject,
@@ -17,12 +19,11 @@ import { MatPaginatorModule } from "@angular/material/paginator";
 import { MatTableModule } from "@angular/material/table";
 import { BrowserAnimationsModule } from "@angular/platform-browser/animations";
 import { Store } from "@ngrx/store";
-import { MockStore } from "shared/MockStubs";
+import { createMock, MockStore } from "shared/MockStubs";
 import {
   PageChangeEvent,
   SortChangeEvent,
 } from "shared/modules/table/table.component";
-import { Sample } from "shared/sdk";
 import {
   changePageAction,
   setTextFilterAction,
@@ -30,6 +31,7 @@ import {
 } from "state-management/actions/samples.actions";
 
 import { SampleEditComponent } from "./sample-edit.component";
+import { SampleClass } from "@scicatproject/scicat-sdk-ts-angular";
 
 describe("SampleEditComponent", () => {
   let component: SampleEditComponent;
@@ -38,28 +40,26 @@ describe("SampleEditComponent", () => {
   let store: MockStore;
   let dispatchSpy;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        declarations: [SampleEditComponent],
-        imports: [
-          BrowserAnimationsModule,
-          MatButtonModule,
-          MatDialogModule,
-          MatFormFieldModule,
-          MatIconModule,
-          MatInputModule,
-          MatPaginatorModule,
-          MatTableModule,
-        ],
-        providers: [
-          { provide: MatDialogRef, useValue: { close: () => {} } },
-          { provide: MAT_DIALOG_DATA, useValue: {} },
-          { provide: Store, useClass: MockStore },
-        ],
-      }).compileComponents();
-    })
-  );
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      declarations: [SampleEditComponent],
+      imports: [
+        BrowserAnimationsModule,
+        MatButtonModule,
+        MatDialogModule,
+        MatFormFieldModule,
+        MatIconModule,
+        MatInputModule,
+        MatPaginatorModule,
+        MatTableModule,
+      ],
+      providers: [
+        { provide: MatDialogRef, useValue: { close: () => {} } },
+        { provide: MAT_DIALOG_DATA, useValue: {} },
+        { provide: Store, useClass: MockStore },
+      ],
+    }).compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(SampleEditComponent);
@@ -87,7 +87,7 @@ describe("SampleEditComponent", () => {
 
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        setTextFilterAction({ text: "" })
+        setTextFilterAction({ text: "" }),
       );
     });
   });
@@ -126,7 +126,7 @@ describe("SampleEditComponent", () => {
 
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        changePageAction({ page: event.pageIndex, limit: event.pageSize })
+        changePageAction({ page: event.pageIndex, limit: event.pageSize }),
       );
     });
   });
@@ -144,7 +144,10 @@ describe("SampleEditComponent", () => {
 
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        sortByColumnAction({ column: event.active, direction: event.direction })
+        sortByColumnAction({
+          column: event.active,
+          direction: event.direction,
+        }),
       );
     });
   });
@@ -159,22 +162,18 @@ describe("SampleEditComponent", () => {
     it("should return false if sample in form has same id as current sample", () => {
       const sampleId = "abc123";
 
-      const sample = new Sample({
+      const sample = createMock<SampleClass>({
         sampleId,
         owner: "test",
         description: "test",
-        createdAt: new Date(),
+        createdAt: new Date().toString(),
         sampleCharacteristics: {},
         isPublished: false,
         ownerGroup: "test",
         accessGroups: [],
         createdBy: "test",
         updatedBy: "test",
-        datasetId: "test",
-        datasetsId: "test",
-        rawDatasetId: "test",
-        derivedDatasetId: "test",
-        updatedAt: new Date(),
+        updatedAt: new Date().toString(),
       });
 
       component.data.sampleId = sampleId;
@@ -188,22 +187,18 @@ describe("SampleEditComponent", () => {
     it("should return true if form is valid", () => {
       const sampleId = "abc123";
 
-      const sample = new Sample({
+      const sample = createMock<SampleClass>({
         sampleId: "123abc",
         owner: "test",
         description: "test",
-        createdAt: new Date(),
+        createdAt: new Date().toString(),
         sampleCharacteristics: {},
         isPublished: false,
         ownerGroup: "test",
         accessGroups: [],
         createdBy: "test",
         updatedBy: "test",
-        datasetId: "test",
-        datasetsId: "test",
-        rawDatasetId: "test",
-        derivedDatasetId: "test",
-        updatedAt: new Date(),
+        updatedAt: new Date().toString(),
       });
 
       component.data.sampleId = sampleId;
@@ -229,22 +224,18 @@ describe("SampleEditComponent", () => {
     it("should close the dialog and emit data", () => {
       const dialogCloseSpy = spyOn(component.dialogRef, "close");
 
-      const sample = new Sample({
+      const sample = createMock<SampleClass>({
         sampleId: "123abc",
         owner: "test",
         description: "test",
-        createdAt: new Date(),
+        createdAt: new Date().toString(),
         sampleCharacteristics: {},
         isPublished: false,
         ownerGroup: "test",
         accessGroups: [],
         createdBy: "test",
         updatedBy: "test",
-        datasetId: "test",
-        datasetsId: "test",
-        rawDatasetId: "test",
-        derivedDatasetId: "test",
-        updatedAt: new Date(),
+        updatedAt: new Date().toString(),
       });
 
       component.sample.setValue(sample);

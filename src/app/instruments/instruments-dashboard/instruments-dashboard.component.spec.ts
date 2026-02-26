@@ -1,29 +1,21 @@
-import {
-  ComponentFixture,
-  TestBed,
-  inject,
-  waitForAsync,
-} from "@angular/core/testing";
+import { ComponentFixture, TestBed, waitForAsync } from "@angular/core/testing";
 
 import { InstrumentsDashboardComponent } from "./instruments-dashboard.component";
-import { MockStore } from "shared/MockStubs";
+import { MockActivatedRoute, mockInstrument } from "shared/MockStubs";
 import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { provideMockStore } from "@ngrx/store/testing";
-import { selectInstrumentsDashboardPageViewModel } from "state-management/selectors/instruments.selectors";
-import { Store } from "@ngrx/store";
+import { selectInstrumentsWithCountAndTableSettings } from "state-management/selectors/instruments.selectors";
 import { SharedScicatFrontendModule } from "shared/shared.module";
-import { JsonHeadPipe } from "shared/pipes/json-head.pipe";
+import { SortChangeEvent } from "shared/modules/table/table.component";
+import { ActivatedRoute, Router } from "@angular/router";
+import { FlexLayoutModule } from "@ngbracket/ngx-layout";
 import {
-  PageChangeEvent,
-  SortChangeEvent,
-} from "shared/modules/table/table.component";
-import {
-  changePageAction,
-  sortByColumnAction,
-} from "state-management/actions/instruments.actions";
-import { Router } from "@angular/router";
-import { Instrument } from "shared/sdk";
-import { FlexLayoutModule } from "@angular/flex-layout";
+  RowEventType,
+  TableEventType,
+} from "shared/modules/dynamic-material-table/models/table-row.model";
+import { TablePagination } from "shared/modules/dynamic-material-table/models/table-pagination.model";
+import { BrowserAnimationsModule } from "@angular/platform-browser/animations";
+import { TranslateService } from "@ngx-translate/core";
 
 describe("InstrumentsDashboardComponent", () => {
   let component: InstrumentsDashboardComponent;
@@ -31,51 +23,50 @@ describe("InstrumentsDashboardComponent", () => {
 
   const router = {
     navigateByUrl: jasmine.createSpy("navigateByUrl"),
+    navigate: jasmine.createSpy("navigate"),
   };
-  let store: MockStore;
-  let dispatchSpy;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        schemas: [NO_ERRORS_SCHEMA],
-        declarations: [InstrumentsDashboardComponent],
-        imports: [FlexLayoutModule, SharedScicatFrontendModule],
-        providers: [
-          JsonHeadPipe,
-          provideMockStore({
-            selectors: [
-              {
-                selector: selectInstrumentsDashboardPageViewModel,
-                value: {
-                  instruments: [],
-                  currentPage: 0,
-                  instrumentsCount: 100,
-                  instrumentsPerPage: 25,
-                },
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      schemas: [NO_ERRORS_SCHEMA],
+      declarations: [InstrumentsDashboardComponent],
+      imports: [
+        FlexLayoutModule,
+        SharedScicatFrontendModule,
+        BrowserAnimationsModule,
+      ],
+      providers: [
+        provideMockStore({
+          selectors: [
+            {
+              selector: selectInstrumentsWithCountAndTableSettings,
+              value: {
+                instruments: [],
+                count: 100,
+                tableSettings: {},
               },
-            ],
-          }),
+            },
+          ],
+        }),
+        { provide: TranslateService, useValue: { instant: (k: string) => k } },
+      ],
+    });
+    TestBed.overrideComponent(InstrumentsDashboardComponent, {
+      set: {
+        providers: [
+          { provide: Router, useValue: router },
+          { provide: ActivatedRoute, useClass: MockActivatedRoute },
         ],
-      });
-      TestBed.overrideComponent(InstrumentsDashboardComponent, {
-        set: {
-          providers: [{ provide: Router, useValue: router }],
-        },
-      });
-      TestBed.compileComponents();
-    })
-  );
+      },
+    });
+    TestBed.compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(InstrumentsDashboardComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
   });
-
-  beforeEach(inject([Store], (mockStore: MockStore) => {
-    store = mockStore;
-  }));
 
   afterEach(() => {
     fixture.destroy();
@@ -86,52 +77,65 @@ describe("InstrumentsDashboardComponent", () => {
   });
 
   describe("#onPageChange()", () => {
-    it("should dispatch a changePageAction", () => {
-      dispatchSpy = spyOn(store, "dispatch");
-
-      const event: PageChangeEvent = {
+    it("should dispatch a fetchInstrumentsAction", () => {
+      router.navigate.calls.reset();
+      const event: TablePagination = {
         pageIndex: 0,
         pageSize: 25,
         length: 100,
       };
 
-      const { pageIndex: page, pageSize: limit } = event;
+      const { pageIndex, pageSize } = event;
 
-      component.onPageChange(event);
+      component.onPaginationChange(event);
 
-      expect(dispatchSpy).toHaveBeenCalledTimes(1);
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        changePageAction({ page, limit })
-      );
+      expect(router.navigate).toHaveBeenCalledTimes(1);
+      expect(router.navigate).toHaveBeenCalledWith([], {
+        queryParams: {
+          pageIndex,
+          pageSize,
+        },
+        queryParamsHandling: "merge",
+      });
     });
   });
 
-  describe("#onSortChange()", () => {
-    it("should dispatch a sortByColumnAction", () => {
-      dispatchSpy = spyOn(store, "dispatch");
-
+  describe("#onTableEvent()", () => {
+    it("should dispatch a fetchInstrumentsAction", () => {
+      router.navigate.calls.reset();
       const event: SortChangeEvent = {
         active: "test",
         direction: "asc",
       };
 
-      const { active: column, direction } = event;
+      const { active: sortColumn, direction: sortDirection } = event;
 
-      component.onSortChange(event);
+      component.onTableEvent({
+        event: TableEventType.SortChanged,
+        sender: event,
+      });
 
-      expect(dispatchSpy).toHaveBeenCalledTimes(1);
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        sortByColumnAction({ column, direction })
-      );
+      expect(router.navigate).toHaveBeenCalledTimes(1);
+      expect(router.navigate).toHaveBeenCalledWith([], {
+        queryParams: {
+          pageIndex: 0,
+          sortDirection: sortDirection || undefined,
+          sortColumn: sortDirection ? sortColumn : undefined,
+        },
+        queryParamsHandling: "merge",
+      });
     });
   });
 
   describe("#onRowClick()", () => {
     it("should navigate to an instrument", () => {
-      const instrument = new Instrument();
+      const instrument = mockInstrument;
       const pid = encodeURIComponent(instrument.pid);
 
-      component.onRowClick(instrument);
+      component.onRowClick({
+        event: RowEventType.RowClick,
+        sender: { row: instrument },
+      });
 
       expect(router.navigateByUrl).toHaveBeenCalledTimes(1);
       expect(router.navigateByUrl).toHaveBeenCalledWith("/instruments/" + pid);

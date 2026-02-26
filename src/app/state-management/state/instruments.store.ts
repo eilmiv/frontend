@@ -1,4 +1,5 @@
-import { Instrument, GenericFilters } from "../models";
+import { Instrument } from "@scicatproject/scicat-sdk-ts-angular";
+import { GenericFilters } from "../models";
 
 export interface InstrumentState {
   instruments: Instrument[];
@@ -16,6 +17,6 @@ export const initialInstrumentState: InstrumentState = {
   filters: {
     sortField: "name asc",
     skip: 0,
-    limit: 25
-  }
+    limit: 25,
+  },
 };

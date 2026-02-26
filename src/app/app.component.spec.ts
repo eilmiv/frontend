@@ -7,6 +7,9 @@ import { MockStore } from "./shared/MockStubs";
 import { APP_CONFIG } from "./app-config.module";
 import { MatProgressSpinnerModule } from "@angular/material/progress-spinner";
 import { AppConfigService } from "app-config.service";
+import { Configuration } from "@scicatproject/scicat-sdk-ts-angular";
+import { TranslateService } from "@ngx-translate/core";
+import { of } from "rxjs";
 
 describe("AppComponent", () => {
   const getConfig = () => ({
@@ -22,6 +25,12 @@ describe("AppComponent", () => {
         MatSnackBarModule,
         StoreModule.forRoot({}),
       ],
+      providers: [
+        {
+          provide: TranslateService,
+          useValue: { instant: (k: string) => k, use: () => of({}) },
+        },
+      ],
       declarations: [AppComponent],
     });
     TestBed.overrideComponent(AppComponent, {
@@ -29,6 +38,10 @@ describe("AppComponent", () => {
         providers: [
           { provide: Store, useClass: MockStore },
           { provide: AppConfigService, useValue: { getConfig } },
+          {
+            provide: Configuration,
+            useClass: Configuration,
+          },
           {
             provide: APP_CONFIG,
             useValue: {
@@ -41,23 +54,17 @@ describe("AppComponent", () => {
     TestBed.compileComponents();
   });
 
-  it(
-    "should create the app",
-    waitForAsync(() => {
-      const fixture = TestBed.createComponent(AppComponent);
-      const app = fixture.debugElement.componentInstance;
-      app.store = TestBed.inject(Store);
-      expect(app).toBeTruthy();
-    })
-  );
+  it("should create the app", waitForAsync(() => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.debugElement.componentInstance;
+    app.store = TestBed.inject(Store);
+    expect(app).toBeTruthy();
+  }));
 
-  it(
-    `should have as title 'SciCat'`,
-    waitForAsync(() => {
-      const fixture = TestBed.createComponent(AppComponent);
-      const app = fixture.debugElement.componentInstance;
-      app.store = TestBed.inject(Store);
-      expect(app.title).toContain("SciCat");
-    })
-  );
+  it(`should have as title 'SciCat'`, waitForAsync(() => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.debugElement.componentInstance;
+    app.store = TestBed.inject(Store);
+    expect(app.title).toContain("SciCat");
+  }));
 });

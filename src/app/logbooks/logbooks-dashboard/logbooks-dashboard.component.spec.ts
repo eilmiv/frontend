@@ -8,7 +8,7 @@ import {
 
 import { LogbooksDashboardComponent } from "./logbooks-dashboard.component";
 import { Store, StoreModule } from "@ngrx/store";
-import { MockStore, MockActivatedRoute } from "shared/MockStubs";
+import { MockStore, MockActivatedRoute, createMock } from "shared/MockStubs";
 import { ActivatedRoute, Router } from "@angular/router";
 import {
   setTextFilterAction,
@@ -17,7 +17,6 @@ import {
   changePageAction,
   sortByColumnAction,
 } from "state-management/actions/logbooks.actions";
-import { RawDataset, RawDatasetInterface, Logbook, LogbookInterface } from "shared/sdk";
 import { LogbookFilters } from "state-management/models";
 import { RouterTestingModule } from "@angular/router/testing";
 
@@ -43,14 +42,7 @@ describe("DashboardComponent", () => {
   let store: MockStore;
   let dispatchSpy;
 
-  const logbookData: LogbookInterface = {
-    name: "testLogbook",
-    roomId: "testId",
-    messages: [{ message: "test1" }, { message: "test2" }],
-  };
-  const logbook = new Logbook(logbookData);
-
-  const rawDatasetData: RawDatasetInterface = {
+  const rawDatasetData = {
     pid: "67ac46e4-5e87-11ed-9634-fba3f42127ef",
     ownerGroup: "testLogbook",
     proposalId: "testLogbook",
@@ -60,36 +52,42 @@ describe("DashboardComponent", () => {
     contactEmail: "somebody@somewhere.here",
     sourceFolder: "some/folders/on/some/server",
     creationTime: undefined,
-    type: "raw"
+    type: "raw",
+    createdAt: "",
+    createdBy: "",
+    inputDatasets: [],
+    investigator: "",
+    numberOfFilesArchived: 0,
+    updatedAt: "",
+    updatedBy: "",
+    usedSoftware: [],
   };
-  const dataset = new RawDataset(rawDatasetData);
+  const dataset = createMock(rawDatasetData);
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        schemas: [NO_ERRORS_SCHEMA],
-        declarations: [LogbooksDashboardComponent],
-        imports: [
-          BrowserAnimationsModule,
-          MatCardModule,
-          MatExpansionModule,
-          MatIconModule,
-          RouterTestingModule.withRoutes([]),
-          StoreModule.forRoot({}),
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      schemas: [NO_ERRORS_SCHEMA],
+      declarations: [LogbooksDashboardComponent],
+      imports: [
+        BrowserAnimationsModule,
+        MatCardModule,
+        MatExpansionModule,
+        MatIconModule,
+        RouterTestingModule.withRoutes([]),
+        StoreModule.forRoot({}),
+      ],
+    });
+    TestBed.overrideComponent(LogbooksDashboardComponent, {
+      set: {
+        providers: [
+          { provide: ActivatedRoute, useClass: MockActivatedRoute },
+          { provide: AppConfigService, useValue: { getConfig } },
         ],
-      });
-      TestBed.overrideComponent(LogbooksDashboardComponent, {
-        set: {
-          providers: [
-            { provide: ActivatedRoute, useClass: MockActivatedRoute },
-            { provide: AppConfigService, useValue: { getConfig } },
-          ],
-        },
-      }).compileComponents();
+      },
+    }).compileComponents();
 
-      router = TestBed.inject(Router);
-    })
-  );
+    router = TestBed.inject(Router);
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(LogbooksDashboardComponent);
@@ -125,9 +123,12 @@ describe("DashboardComponent", () => {
       component.applyRouterState(dataset.pid, filters);
 
       expect(navigateSpy).toHaveBeenCalledTimes(1);
-      expect(navigateSpy).toHaveBeenCalledWith(["/datasets", dataset.pid, "logbook"], {
-        queryParams: { args: JSON.stringify(filters) },
-      });
+      expect(navigateSpy).toHaveBeenCalledWith(
+        ["/datasets", dataset.pid, "logbook"],
+        {
+          queryParams: { args: JSON.stringify(filters) },
+        },
+      );
     });
   });
 
@@ -140,12 +141,12 @@ describe("DashboardComponent", () => {
 
       expect(dispatchSpy).toHaveBeenCalledTimes(2);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        setTextFilterAction({ textSearch })
+        setTextFilterAction({ textSearch }),
       );
       expect(dispatchSpy).toHaveBeenCalledWith(
         fetchDatasetLogbookAction({
           pid: dataset.pid,
-        })
+        }),
       );
     });
   });
@@ -174,12 +175,12 @@ describe("DashboardComponent", () => {
           showBotMessages,
           showImages,
           showUserMessages,
-        })
+        }),
       );
       expect(dispatchSpy).toHaveBeenCalledWith(
         fetchDatasetLogbookAction({
           pid: dataset.pid,
-        })
+        }),
       );
       expect(methodSpy).toHaveBeenCalled();
     });
@@ -199,10 +200,10 @@ describe("DashboardComponent", () => {
 
       expect(dispatchSpy).toHaveBeenCalledTimes(2);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        changePageAction({ page: event.pageIndex, limit: event.pageSize })
+        changePageAction({ page: event.pageIndex, limit: event.pageSize }),
       );
       expect(dispatchSpy).toHaveBeenCalledWith(
-        fetchDatasetLogbookAction({ pid: dataset.pid })
+        fetchDatasetLogbookAction({ pid: dataset.pid }),
       );
     });
   });
@@ -220,10 +221,13 @@ describe("DashboardComponent", () => {
 
       expect(dispatchSpy).toHaveBeenCalledTimes(2);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        sortByColumnAction({ column: event.active, direction: event.direction })
+        sortByColumnAction({
+          column: event.active,
+          direction: event.direction,
+        }),
       );
       expect(dispatchSpy).toHaveBeenCalledWith(
-        fetchDatasetLogbookAction({ pid: dataset.pid })
+        fetchDatasetLogbookAction({ pid: dataset.pid }),
       );
     });
   });

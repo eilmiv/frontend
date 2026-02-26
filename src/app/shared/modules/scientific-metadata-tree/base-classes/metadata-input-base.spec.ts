@@ -1,10 +1,13 @@
 import { ComponentFixture, TestBed, waitForAsync } from "@angular/core/testing";
 import { FormBuilder } from "@angular/forms";
-import { MatAutocompleteModule } from "@angular/material/autocomplete";
 import { Type } from "../base-classes/metadata-input-base";
 import { FlatNodeEdit } from "../tree-edit/tree-edit.component";
-import { MetadataInputComponent} from "../metadata-input/metadata-input.component";
+import { MetadataInputComponent } from "../metadata-input/metadata-input.component";
 import { FormatNumberPipe } from "shared/pipes/format-number.pipe";
+import { ScientificMetadataTreeModule } from "../scientific-metadata-tree.module";
+import { BrowserAnimationsModule } from "@angular/platform-browser/animations";
+import { AppConfigService } from "app-config.service";
+import { provideHttpClient } from "@angular/common/http";
 
 describe("MetadataInputBase", () => {
   let component: MetadataInputComponent;
@@ -13,15 +16,26 @@ describe("MetadataInputBase", () => {
   beforeEach(waitForAsync(() => {
     TestBed.configureTestingModule({
       declarations: [MetadataInputComponent],
-      imports: [
-        MatAutocompleteModule,
+      imports: [ScientificMetadataTreeModule, BrowserAnimationsModule],
+      providers: [
+        FormBuilder,
+        FormatNumberPipe,
+        AppConfigService,
+        provideHttpClient(),
       ],
-      providers: [FormBuilder, FormatNumberPipe]
-    })
-      .compileComponents();
+    }).compileComponents();
   }));
 
   beforeEach(() => {
+    const appConfigService = TestBed.inject(AppConfigService);
+    (appConfigService as any).appConfig = {
+      metadataFloatFormatEnabled: true,
+      metadataFloatFormat: {
+        significantDigits: 3,
+        minCutoff: 0.001,
+        maxCutoff: 1000,
+      },
+    };
     fixture = TestBed.createComponent(MetadataInputComponent);
     component = fixture.componentInstance;
     const data = new FlatNodeEdit();
@@ -76,7 +90,7 @@ describe("MetadataInputBase", () => {
       component.metadataForm.get("type").setValue(Type.boolean);
       component.detectType();
       const result = component.getErrorMessage("value");
-      expect(result).toEqual("Boolean must be \"true\" or \"false\"");
+      expect(result).toEqual('Boolean must be "true" or "false"');
     });
     it("#getErrorMessage() && #numberValidator() should not return any error", () => {
       component.metadataForm.get("type").setValue(Type.number);

@@ -1,17 +1,13 @@
 import { Component, OnInit, Input, OnDestroy } from "@angular/core";
-import { ArchViewMode, MessageType, Dataset } from "state-management/models";
+import { ArchViewMode, MessageType } from "state-management/models";
 import { Store } from "@ngrx/store";
 import {
-  setPublicViewModeAction,
   setArchiveViewModeAction,
   clearSelectionAction,
   addToBatchAction,
 } from "state-management/actions/datasets.actions";
 import { Subscription } from "rxjs";
-import {
-  selectArchiveViewMode,
-  selectPublicViewMode,
-} from "state-management/selectors/datasets.selectors";
+import { selectArchiveViewMode } from "state-management/selectors/datasets.selectors";
 import { selectIsLoading } from "state-management/selectors/user.selectors";
 import { ArchivingService } from "datasets/archiving.service";
 import { MatDialog } from "@angular/material/dialog";
@@ -19,17 +15,19 @@ import { DialogComponent } from "shared/modules/dialog/dialog.component";
 import { showMessageAction } from "state-management/actions/user.actions";
 import { selectSubmitError } from "state-management/selectors/jobs.selectors";
 import { AppConfigService } from "app-config.service";
+import { OutputDatasetObsoleteDto } from "@scicatproject/scicat-sdk-ts-angular";
 
 @Component({
   selector: "dataset-table-actions",
   templateUrl: "./dataset-table-actions.component.html",
   styleUrls: ["./dataset-table-actions.component.scss"],
+  standalone: false,
 })
 export class DatasetTableActionsComponent implements OnInit, OnDestroy {
   appConfig = this.appConfigService.getConfig();
   loading$ = this.store.select(selectIsLoading);
 
-  @Input() selectedSets: Dataset[] | null = [];
+  @Input() selectedSets: OutputDatasetObsoleteDto[] | null = [];
 
   public currentArchViewMode: ArchViewMode = ArchViewMode.all;
   public viewModes = ArchViewMode;
@@ -43,7 +41,6 @@ export class DatasetTableActionsComponent implements OnInit, OnDestroy {
   ];
 
   searchPublicDataEnabled = this.appConfig.searchPublicDataEnabled;
-  currentPublicViewMode: boolean | "" = "";
 
   subscriptions: Subscription[] = [];
 
@@ -51,7 +48,7 @@ export class DatasetTableActionsComponent implements OnInit, OnDestroy {
     private appConfigService: AppConfigService,
     private archivingSrv: ArchivingService,
     public dialog: MatDialog,
-    private store: Store
+    private store: Store,
   ) {}
 
   /**
@@ -60,13 +57,6 @@ export class DatasetTableActionsComponent implements OnInit, OnDestroy {
    */
   onModeChange(mode: ArchViewMode): void {
     this.store.dispatch(setArchiveViewModeAction({ modeToggle: mode }));
-  }
-
-  onViewPublicChange(value: boolean): void {
-    this.currentPublicViewMode = value;
-    this.store.dispatch(
-      setPublicViewModeAction({ isPublished: this.currentPublicViewMode })
-    );
   }
 
   isEmptySelection(): boolean {
@@ -96,8 +86,8 @@ export class DatasetTableActionsComponent implements OnInit, OnDestroy {
                   content: err.message,
                   duration: 5000,
                 },
-              })
-            )
+              }),
+            ),
         );
       }
     });
@@ -109,15 +99,15 @@ export class DatasetTableActionsComponent implements OnInit, OnDestroy {
    */
   retrieveClickHandle(): void {
     const destPath = { destinationPath: "/archive/retrieve" };
-    let dialogOptions = this.archivingSrv.retriveDialogOptions(
-      this.appConfig.retrieveDestinations
+    const dialogOptions = this.archivingSrv.retriveDialogOptions(
+      this.appConfig.retrieveDestinations,
     );
     const dialogRef = this.dialog.open(DialogComponent, dialogOptions);
     dialogRef.afterClosed().subscribe((result) => {
       if (result && this.selectedSets) {
         const locationOption = this.archivingSrv.generateOptionLocation(
           result,
-          this.appConfig.retrieveDestinations
+          this.appConfig.retrieveDestinations,
         );
         const extra = { ...destPath, ...locationOption };
         this.archivingSrv.retrieve(this.selectedSets, extra).subscribe(
@@ -130,8 +120,8 @@ export class DatasetTableActionsComponent implements OnInit, OnDestroy {
                   content: err.message,
                   duration: 5000,
                 },
-              })
-            )
+              }),
+            ),
         );
       }
     });
@@ -148,13 +138,7 @@ export class DatasetTableActionsComponent implements OnInit, OnDestroy {
         .select(selectArchiveViewMode)
         .subscribe((mode: ArchViewMode) => {
           this.currentArchViewMode = mode;
-        })
-    );
-
-    this.subscriptions.push(
-      this.store.select(selectPublicViewMode).subscribe((publicViewMode) => {
-        this.currentPublicViewMode = publicViewMode;
-      })
+        }),
     );
 
     this.subscriptions.push(
@@ -162,7 +146,7 @@ export class DatasetTableActionsComponent implements OnInit, OnDestroy {
         if (!err) {
           this.store.dispatch(clearSelectionAction());
         }
-      })
+      }),
     );
   }
 

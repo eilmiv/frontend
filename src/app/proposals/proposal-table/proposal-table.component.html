@@ -1,0 +1,27 @@
+<dynamic-mat-table
+  [tableName]="tableName"
+  [columns]="columns"
+  [pending]="pending"
+  [setting]="setting"
+  [pagingMode]="paginationMode"
+  [dataSource]="dataSource"
+  [pagination]="pagination"
+  [rowSelectionMode]="rowSelectionMode"
+  [showGlobalTextSearch]="true"
+  [globalTextSearch]="globalTextSearch"
+  (globalTextSearchChange)="onTextSearchChange($event)"
+  (globalTextSearchApply)="onTextSearchAction()"
+  [globalTextSearchPlaceholder]="'Proposal id, Title, Abstract...'"
+  [localization]="localization"
+  [sideFilterCollapsed] = "sideFilterCollapsed"
+  (paginationChange)="onPageChange($event)"
+  (onRowEvent)="onRowClick($event)"
+  (settingChange)="onSettingChange($event)"
+  (onTableEvent)="onTableEvent($event)"
+  class="mat-elevation-z2"
+  [emptyMessage]="
+    'No proposals available. Please reset the filters and try again'
+  "
+  [emptyIcon]="'folder'"
+>
+</dynamic-mat-table>

@@ -1,17 +1,23 @@
 import * as fromSelectors from "./samples.selectors";
 import { SampleState } from "state-management/state/samples.store";
-import { SampleInterface, Sample } from "shared/sdk";
 import { initialUserState } from "state-management/state/user.store";
+import { createMock } from "shared/MockStubs";
+import { SampleClass } from "@scicatproject/scicat-sdk-ts-angular";
 
-const data: SampleInterface = {
+const sample = createMock<SampleClass>({
   sampleId: "testId",
   ownerGroup: "testGroup",
-  attachments: [],
-};
-const sample = new Sample(data);
+  createdBy: "",
+  updatedBy: "",
+  createdAt: new Date().toString(),
+  updatedAt: new Date().toString(),
+  accessGroups: [],
+  isPublished: false,
+});
 
 const initialSampleState: SampleState = {
   samples: [],
+  attachments: [],
   currentSample: sample,
   datasets: [],
   metadataKeys: [],
@@ -40,7 +46,7 @@ describe("Sample Selectors", () => {
   describe("selectSamples", () => {
     it("should select samples", () => {
       expect(fromSelectors.selectSamples.projector(initialSampleState)).toEqual(
-        []
+        [],
       );
     });
   });
@@ -48,7 +54,7 @@ describe("Sample Selectors", () => {
   describe("selectMetadataKeys", () => {
     it("should select metadataKeys", () => {
       expect(
-        fromSelectors.selectMetadataKeys.projector(initialSampleState)
+        fromSelectors.selectMetadataKeys.projector(initialSampleState),
       ).toEqual([]);
     });
   });
@@ -56,7 +62,7 @@ describe("Sample Selectors", () => {
   describe("selectCurrentSample", () => {
     it("should select the current sample", () => {
       expect(
-        fromSelectors.selectCurrentSample.projector(initialSampleState)
+        fromSelectors.selectCurrentSample.projector(initialSampleState),
       ).toEqual(sample);
     });
   });
@@ -64,9 +70,7 @@ describe("Sample Selectors", () => {
   describe("selectCurrentSample", () => {
     it("should select the attachments from the current sample", () => {
       expect(
-        fromSelectors.selectCurrentAttachments.projector(
-          initialSampleState.currentSample
-        )
+        fromSelectors.selectCurrentAttachments.projector(initialSampleState),
       ).toEqual([]);
     });
   });
@@ -74,7 +78,7 @@ describe("Sample Selectors", () => {
   describe("selectDatasets", () => {
     it("should select the datasets related to the current sample", () => {
       expect(
-        fromSelectors.selectDatasets.projector(initialSampleState)
+        fromSelectors.selectDatasets.projector(initialSampleState),
       ).toEqual([]);
     });
   });
@@ -82,7 +86,7 @@ describe("Sample Selectors", () => {
   describe("selectSamplesCount", () => {
     it("should select samplesCount", () => {
       expect(
-        fromSelectors.selectSamplesCount.projector(initialSampleState)
+        fromSelectors.selectSamplesCount.projector(initialSampleState),
       ).toEqual(0);
     });
   });
@@ -90,7 +94,7 @@ describe("Sample Selectors", () => {
   describe("selectDatasetsCount", () => {
     it("should select datasetsCount", () => {
       expect(
-        fromSelectors.selectDatasetsCount.projector(initialSampleState)
+        fromSelectors.selectDatasetsCount.projector(initialSampleState),
       ).toEqual(0);
     });
   });
@@ -98,7 +102,7 @@ describe("Sample Selectors", () => {
   describe("selectHasPrefilledFilters", () => {
     it("should select hasPrefilledFilters", () => {
       expect(
-        fromSelectors.selectHasPrefilledFilters.projector(initialSampleState)
+        fromSelectors.selectHasPrefilledFilters.projector(initialSampleState),
       ).toEqual(false);
     });
   });
@@ -106,7 +110,7 @@ describe("Sample Selectors", () => {
   describe("selectFilters", () => {
     it("should select sampleFilters", () => {
       expect(fromSelectors.selectFilters.projector(initialSampleState)).toEqual(
-        initialSampleState.sampleFilters
+        initialSampleState.sampleFilters,
       );
     });
   });
@@ -115,8 +119,8 @@ describe("Sample Selectors", () => {
     it("should select text filter from sampleFilters", () => {
       expect(
         fromSelectors.selectTextFilter.projector(
-          initialSampleState.sampleFilters
-        )
+          initialSampleState.sampleFilters,
+        ),
       ).toEqual("test");
     });
   });
@@ -124,7 +128,7 @@ describe("Sample Selectors", () => {
   describe("selectDatasetFilters", () => {
     it("should select datasetFilters", () => {
       expect(
-        fromSelectors.selectDatasetFilters.projector(initialSampleState)
+        fromSelectors.selectDatasetFilters.projector(initialSampleState),
       ).toEqual(initialSampleState.datasetFilters);
     });
   });
@@ -134,7 +138,7 @@ describe("Sample Selectors", () => {
       const { skip, limit } = initialSampleState.sampleFilters;
       const page = skip / limit;
       expect(
-        fromSelectors.selectPage.projector(initialSampleState.sampleFilters)
+        fromSelectors.selectPage.projector(initialSampleState.sampleFilters),
       ).toEqual(page);
     });
   });
@@ -145,8 +149,8 @@ describe("Sample Selectors", () => {
       const page = skip / limit;
       expect(
         fromSelectors.selectDatasetsPage.projector(
-          initialSampleState.datasetFilters
-        )
+          initialSampleState.datasetFilters,
+        ),
       ).toEqual(page);
     });
   });
@@ -155,8 +159,8 @@ describe("Sample Selectors", () => {
     it("should select limit from sampleFilters", () => {
       expect(
         fromSelectors.selectSamplesPerPage.projector(
-          initialSampleState.sampleFilters
-        )
+          initialSampleState.sampleFilters,
+        ),
       ).toEqual(25);
     });
   });
@@ -165,8 +169,8 @@ describe("Sample Selectors", () => {
     it("should select limit from datasetFilters", () => {
       expect(
         fromSelectors.selectDatasetsPerPage.projector(
-          initialSampleState.datasetFilters
-        )
+          initialSampleState.datasetFilters,
+        ),
       ).toEqual(25);
     });
   });
@@ -177,8 +181,8 @@ describe("Sample Selectors", () => {
         fromSelectors.selectSamplesPagination.projector(
           initialSampleState.samplesCount,
           initialSampleState.sampleFilters.limit,
-          fromSelectors.selectPage.projector(initialSampleState.sampleFilters)
-        )
+          fromSelectors.selectPage.projector(initialSampleState.sampleFilters),
+        ),
       ).toEqual({ samplesCount: 0, samplesPerPage: 25, currentPage: 0 });
     });
   });
@@ -191,14 +195,19 @@ describe("Sample Selectors", () => {
           fromSelectors.selectSamplesPagination.projector(
             initialSampleState.samplesCount,
             initialSampleState.sampleFilters.limit,
-            fromSelectors.selectPage.projector(initialSampleState.sampleFilters)
+            fromSelectors.selectPage.projector(
+              initialSampleState.sampleFilters,
+            ),
           ),
           initialSampleState.sampleFilters,
           initialSampleState.hasPrefilledFilters,
           initialSampleState.sampleFilters.text,
           initialSampleState.metadataKeys,
-          initialSampleState.sampleFilters.characteristics
-        )
+          initialSampleState.sampleFilters.characteristics,
+          initialUserState.tablesSettings,
+          initialSampleState.samplesCount,
+          false, //hasAppliedFilters
+        ),
       ).toEqual({
         samples: [],
         samplesPagination: {
@@ -211,6 +220,9 @@ describe("Sample Selectors", () => {
         textFilter: "test",
         metadataKeys: [],
         characteristicsFilter: [],
+        tableSettings: {},
+        count: 0,
+        hasAppliedFilters: false,
       });
     });
   });
@@ -223,14 +235,12 @@ describe("Sample Selectors", () => {
           initialSampleState.datasets,
           initialSampleState.datasetFilters.limit,
           fromSelectors.selectDatasetsPage.projector(
-            initialSampleState.datasetFilters
+            initialSampleState.datasetFilters,
           ),
           initialSampleState.datasetsCount,
-          fromSelectors.selectCurrentAttachments.projector(
-            initialSampleState.currentSample
-          ),
-          initialUserState.currentUser
-        )
+          fromSelectors.selectCurrentAttachments.projector(initialSampleState),
+          initialUserState.currentUser,
+        ),
       ).toEqual({
         sample,
         datasets: [],
@@ -247,8 +257,8 @@ describe("Sample Selectors", () => {
     it("should select the fullquery params", () => {
       const fullqueryKeys = Object.keys(
         fromSelectors.selectFullqueryParams.projector(
-          initialSampleState.sampleFilters
-        )
+          initialSampleState.sampleFilters,
+        ),
       );
       expect(fullqueryKeys).toContain("query");
     });
@@ -260,8 +270,8 @@ describe("Sample Selectors", () => {
       const params = { order: sortField, skip, limit };
       expect(
         fromSelectors.selectDatasetsQueryParams.projector(
-          initialSampleState.datasetFilters
-        )
+          initialSampleState.datasetFilters,
+        ),
       ).toEqual(params);
     });
   });

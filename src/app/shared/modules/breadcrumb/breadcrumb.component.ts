@@ -9,6 +9,7 @@ import {
 import { take, filter } from "rxjs/operators";
 import { TitleCasePipe } from "shared/pipes/title-case.pipe";
 import { ArchViewMode } from "state-management/models";
+import { Location } from "@angular/common";
 
 interface Breadcrumb {
   label: string;
@@ -29,6 +30,7 @@ interface Breadcrumb {
   selector: "breadcrumb",
   templateUrl: "./breadcrumb.component.html",
   styleUrls: ["breadcrumb.component.scss"],
+  standalone: false,
 })
 export class BreadcrumbComponent implements OnInit {
   // partially based on: http://brianflove.com/2016/10/23/angular2-breadcrumb-using-router/
@@ -37,7 +39,8 @@ export class BreadcrumbComponent implements OnInit {
   constructor(
     private store: Store,
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
+    private location: Location,
   ) {}
 
   ngOnInit() {
@@ -62,7 +65,7 @@ export class BreadcrumbComponent implements OnInit {
         accumulator.push(child, ...child.children);
         return accumulator;
       },
-      []
+      [],
     );
     children.forEach((root) => {
       let param: string;
@@ -75,7 +78,7 @@ export class BreadcrumbComponent implements OnInit {
           path: url.path,
           params: url.parameters,
           url: "/" + encodeURIComponent(url.path),
-          fallback: "/" + encodeURIComponent(url.path + "s"),
+          fallback: "/" + encodeURIComponent(url.path),
         };
         this.breadcrumbs.push(crumb);
       });
@@ -121,9 +124,7 @@ export class BreadcrumbComponent implements OnInit {
             .pipe(take(1))
             .subscribe((currentMode) => {
               filters["mode"] = setMode(currentMode);
-              this.router.navigate(["/datasets"], {
-                queryParams: { args: JSON.stringify(filters) },
-              });
+              this.location.back();
             });
         });
     } else {
@@ -131,7 +132,6 @@ export class BreadcrumbComponent implements OnInit {
         .navigateByUrl(url + crumb.url)
         .catch((error) => this.router.navigateByUrl(url + crumb.fallback));
     }
-    // });
   }
 }
 

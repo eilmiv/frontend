@@ -1,13 +1,9 @@
-import { DatasetFilters, Dataset, ArchViewMode } from "state-management/models";
-
-export interface DateTriple {
-  year: number;
-  month: number;
-  day: number;
-}
+import { DatasetFilters, ArchViewMode } from "state-management/models";
+import { OutputDatasetObsoleteDto } from "@scicatproject/scicat-sdk-ts-angular";
 
 export interface FacetCount {
-  _id?: string | DateTriple;
+  _id: string;
+  label?: string;
   count: number;
 }
 
@@ -15,11 +11,16 @@ export interface FacetCounts {
   [field: string]: FacetCount[];
 }
 
+export interface Pagination {
+  skip: number;
+  limit: number;
+}
+
 export interface DatasetState {
-  datasets: Dataset[];
-  selectedSets: Dataset[];
-  currentSet: Dataset | undefined;
-  relatedDatasets: Dataset[];
+  datasets: OutputDatasetObsoleteDto[];
+  selectedSets: OutputDatasetObsoleteDto[];
+  currentSet: OutputDatasetObsoleteDto | undefined;
+  relatedDatasets: OutputDatasetObsoleteDto[];
   relatedDatasetsCount: number;
   totalCount: number;
 
@@ -28,7 +29,9 @@ export interface DatasetState {
   hasPrefilledFilters: boolean;
   searchTerms: string;
   keywordsTerms: string;
+  pidTerms: string;
   filters: DatasetFilters;
+  pagination: Pagination;
 
   relatedDatasetsFilters: {
     skip: number;
@@ -36,7 +39,7 @@ export interface DatasetState {
     sortField: string;
   };
 
-  batch: Dataset[];
+  batch: OutputDatasetObsoleteDto[];
 
   openwhiskResult: Record<string, unknown> | undefined;
 }
@@ -54,6 +57,7 @@ export const initialDatasetState: DatasetState = {
   hasPrefilledFilters: false,
   searchTerms: "",
   keywordsTerms: "",
+  pidTerms: "",
   filters: {
     modeToggle: ArchViewMode.all,
     mode: {},
@@ -68,6 +72,11 @@ export const initialDatasetState: DatasetState = {
     keywords: [],
     scientific: [],
     isPublished: "",
+    pid: "",
+  },
+  pagination: {
+    skip: 0,
+    limit: 25,
   },
   relatedDatasetsFilters: {
     skip: 0,

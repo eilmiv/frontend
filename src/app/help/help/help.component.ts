@@ -5,6 +5,7 @@ import { AppConfigService, HelpMessages } from "app-config.service";
   selector: "help",
   templateUrl: "./help.component.html",
   styleUrls: ["./help.component.scss"],
+  standalone: false,
 })
 export class HelpComponent implements OnInit {
   appConfig = this.appConfigService.getConfig();
@@ -13,16 +14,18 @@ export class HelpComponent implements OnInit {
   gettingStarted: string | null = null;
   shoppingCartEnabled = false;
   helpMessages: HelpMessages;
+  supportEmail: string | undefined;
   constructor(public appConfigService: AppConfigService) {}
 
   ngOnInit() {
     this.facility = this.appConfig.facility;
     this.ingestManual = this.appConfig.ingestManual;
     this.helpMessages = new HelpMessages(
-      this.appConfig.helpMessages?.gettingStarted, 
-      this.appConfig.helpMessages?.ingestManual
-      );
+      this.appConfig.helpMessages?.gettingStarted,
+      this.appConfig.helpMessages?.ingestManual,
+    );
     this.gettingStarted = this.appConfig.gettingStarted;
     this.shoppingCartEnabled = this.appConfig.shoppingCartEnabled;
+    this.supportEmail = this.appConfig.supportEmail;
   }
 }

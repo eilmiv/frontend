@@ -7,33 +7,17 @@ import {
 } from "@angular/core/testing";
 import { Store, StoreModule } from "@ngrx/store";
 import { DatasetsFilterComponent } from "datasets/datasets-filter/datasets-filter.component";
-import { MockStore } from "shared/MockStubs";
+import { MockActivatedRoute, MockHttp, MockStore } from "shared/MockStubs";
 
 import { FormsModule, ReactiveFormsModule } from "@angular/forms";
 import { BrowserAnimationsModule } from "@angular/platform-browser/animations";
-import { FacetCount } from "state-management/state/datasets.store";
 import {
-  setSearchTermsAction,
-  addLocationFilterAction,
-  removeLocationFilterAction,
-  addGroupFilterAction,
-  removeGroupFilterAction,
-  addKeywordFilterAction,
-  removeKeywordFilterAction,
-  addTypeFilterAction,
-  removeTypeFilterAction,
   clearFacetsAction,
-  removeScientificConditionAction,
-  setDateRangeFilterAction,
-  addScientificConditionAction,
+  fetchDatasetsAction,
+  fetchFacetCountsAction,
+  setPublicViewModeAction,
 } from "state-management/actions/datasets.actions";
 import { of } from "rxjs";
-import {
-  selectColumnAction,
-  deselectColumnAction,
-  deselectAllCustomColumnsAction,
-} from "state-management/actions/user.actions";
-import { ScientificCondition } from "state-management/models";
 import { SharedScicatFrontendModule } from "shared/shared.module";
 import { MatAutocompleteModule } from "@angular/material/autocomplete";
 import { MatDialogModule, MatDialog } from "@angular/material/dialog";
@@ -42,25 +26,83 @@ import { MatInputModule } from "@angular/material/input";
 import { MatSelectModule } from "@angular/material/select";
 import { SearchParametersDialogComponent } from "shared/modules/search-parameters-dialog/search-parameters-dialog.component";
 import { AsyncPipe } from "@angular/common";
-import { DateTime } from "luxon";
-import {
-  MatDatepickerInputEvent,
-  MatDatepickerModule,
-} from "@angular/material/datepicker";
+import { MatDatepickerModule } from "@angular/material/datepicker";
 import { MatChipsModule } from "@angular/material/chips";
 import { MatNativeDateModule, MatOptionModule } from "@angular/material/core";
 import { MatCardModule } from "@angular/material/card";
 import { MatButtonModule } from "@angular/material/button";
 import { MatIconModule } from "@angular/material/icon";
 import { AppConfigService } from "app-config.service";
+import { DatasetsFilterSettingsComponent } from "./settings/datasets-filter-settings.component";
+import {
+  selectConditions,
+  selectFilters,
+} from "../../state-management/selectors/user.selectors";
+import { HttpClient } from "@angular/common/http";
+import { FilterConfig } from "state-management/state/user.store";
+import { ActivatedRoute } from "@angular/router";
+
+const filterConfigs: FilterConfig[] = [
+  {
+    key: "creationLocation",
+    label: "Location",
+    type: "multiSelect",
+    description: "Filter by creation location on the dataset",
+    enabled: true,
+  },
+  {
+    key: "pid",
+    label: "Pid",
+    type: "text",
+    description: "Filter by dataset pid",
+    enabled: true,
+  },
+  {
+    key: "ownerGroup",
+    label: "Group",
+    type: "multiSelect",
+    description: "Filter by owner group of the dataset",
+    enabled: true,
+  },
+  {
+    key: "type",
+    label: "Type",
+    type: "multiSelect",
+    description: "Filter by dataset type",
+    enabled: true,
+  },
+  {
+    key: "keywords",
+    label: "Keyword",
+    type: "multiSelect",
+    description: "Filter by keywords in the dataset",
+    enabled: true,
+  },
+  {
+    key: "creationTime",
+    label: "Creation Time",
+    type: "dateRange",
+    description: "Filter by creation time of the dataset",
+    enabled: true,
+  },
+];
+
+export class MockStoreWithFilters extends MockStore {
+  public select(selector) {
+    if (selector === selectFilters) {
+      return of(filterConfigs);
+    }
+    if (selector === selectConditions) {
+      return of([]);
+    }
+    return of(null);
+  }
+}
 
 export class MockMatDialog {
   open() {
     return {
-      afterClosed: () =>
-        of({
-          data: { lhs: "", rhs: "", relation: "EQUAL_TO_STRING", unit: "" },
-        }),
+      afterClosed: () => of(filterConfigs, selectConditions),
     };
   }
 }
@@ -73,54 +115,55 @@ describe("DatasetsFilterComponent", () => {
   let component: DatasetsFilterComponent;
   let fixture: ComponentFixture<DatasetsFilterComponent>;
 
-  let store: MockStore;
+  let store: MockStoreWithFilters;
   let dispatchSpy;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        schemas: [NO_ERRORS_SCHEMA],
-        imports: [
-          BrowserAnimationsModule,
-          FormsModule,
-          MatAutocompleteModule,
-          MatButtonModule,
-          MatCardModule,
-          MatChipsModule,
-          MatDatepickerModule,
-          MatDialogModule,
-          MatFormFieldModule,
-          MatIconModule,
-          MatInputModule,
-          MatOptionModule,
-          MatSelectModule,
-          MatNativeDateModule,
-          ReactiveFormsModule,
-          SharedScicatFrontendModule,
-          StoreModule.forRoot({}),
-        ],
-        declarations: [
-          DatasetsFilterComponent,
-          SearchParametersDialogComponent,
-        ],
-        providers: [AsyncPipe],
-      });
-      TestBed.overrideComponent(DatasetsFilterComponent, {
-        set: {
-          providers: [
-            {
-              provide: AppConfigService,
-              useValue: {
-                getConfig,
-              },
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      schemas: [NO_ERRORS_SCHEMA],
+      imports: [
+        BrowserAnimationsModule,
+        FormsModule,
+        MatAutocompleteModule,
+        MatButtonModule,
+        MatCardModule,
+        MatChipsModule,
+        MatDatepickerModule,
+        MatDialogModule,
+        MatFormFieldModule,
+        MatIconModule,
+        MatInputModule,
+        MatOptionModule,
+        MatSelectModule,
+        MatNativeDateModule,
+        ReactiveFormsModule,
+        SharedScicatFrontendModule,
+        StoreModule.forRoot({}),
+      ],
+      declarations: [DatasetsFilterComponent, SearchParametersDialogComponent],
+      providers: [
+        AsyncPipe,
+        AppConfigService,
+        { provide: HttpClient, useClass: MockHttp },
+        { provide: Store, useClass: MockStoreWithFilters },
+        { provide: ActivatedRoute, useClass: MockActivatedRoute },
+      ],
+    });
+    TestBed.overrideComponent(DatasetsFilterComponent, {
+      set: {
+        providers: [
+          {
+            provide: AppConfigService,
+            useValue: {
+              getConfig,
             },
-            { provide: MatDialog, useClass: MockMatDialog },
-          ],
-        },
-      });
-      TestBed.compileComponents();
-    })
-  );
+          },
+          { provide: MatDialog, useClass: MockMatDialog },
+        ],
+      },
+    });
+    TestBed.compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(DatasetsFilterComponent);
@@ -128,7 +171,7 @@ describe("DatasetsFilterComponent", () => {
     fixture.detectChanges();
   });
 
-  beforeEach(inject([Store], (mockStore: MockStore) => {
+  beforeEach(inject([Store], (mockStore: MockStoreWithFilters) => {
     store = mockStore;
   }));
 
@@ -142,407 +185,85 @@ describe("DatasetsFilterComponent", () => {
 
   it("should contain a date range field", () => {
     const compiled = fixture.debugElement.nativeElement;
-    const beamline = compiled.querySelector(".date-input");
+    const beamline = compiled.querySelector("#creationTime");
     expect(beamline).toBeTruthy();
   });
 
   it("should contain a beamline input", () => {
     const compiled = fixture.debugElement.nativeElement;
-    const beamline = compiled.querySelector(".location-input");
+    const beamline = compiled.querySelector("#creationLocation");
     expect(beamline).toBeTruthy();
   });
 
   it("should contain a groups input", () => {
     const compiled = fixture.debugElement.nativeElement;
-    const group = compiled.querySelector(".group-input");
+    const group = compiled.querySelector("#ownerGroup");
     expect(group).toBeTruthy();
   });
 
   it("should contain a type input", () => {
     const compiled = fixture.debugElement.nativeElement;
-    const type = compiled.querySelector(".type-input");
+    const type = compiled.querySelector("#type");
     expect(type).toBeTruthy();
   });
 
-  it("should contain a clear button", () => {
+  it("should contain a clear all button", () => {
     const compiled = fixture.debugElement.nativeElement;
-    const btn = compiled.querySelector(".clear-button");
-    expect(btn.textContent).toContain("Clear");
+    const btn = compiled.querySelector(".datasets-filters-clear-all-button");
+    expect(btn.textContent).toContain("undo Clear");
   });
 
-  describe("#getFacetId()", () => {
-    it("should return the FacetCount id if present", () => {
-      const facetCount: FacetCount = {
-        _id: "test1",
-        count: 0,
-      };
-      const fallback = "test2";
-
-      const id = component.getFacetId(facetCount, fallback);
-
-      expect(id).toEqual("test1");
-    });
-
-    it("should return the FacetCount id if present", () => {
-      const facetCount: FacetCount = {
-        count: 0,
-      };
-      const fallback = "test";
-
-      const id = component.getFacetId(facetCount, fallback);
-
-      expect(id).toEqual(fallback);
-    });
+  it("should contain a search button", () => {
+    const compiled = fixture.debugElement.nativeElement;
+    const btn = compiled.querySelector(".datasets-filters-search-button");
+    expect(btn.textContent).toContain("search Apply");
   });
 
-  describe("#getFacetCount()", () => {
-    it("should return the FacetCount", () => {
-      const facetCount: FacetCount = {
-        count: 0,
-      };
-
-      const count = component.getFacetCount(facetCount);
-
-      expect(count).toEqual(facetCount.count);
-    });
-  });
-
-  describe("#textSearchChanged()", () => {
-    it("should dispatch a SetSearchTermsAction", () => {
+  describe("#reset()", () => {
+    it("should dispatch a ClearFacetsAction", () => {
       dispatchSpy = spyOn(store, "dispatch");
 
-      const terms = "test";
-      component.textSearchChanged(terms);
+      component.reset();
 
-      expect(dispatchSpy).toHaveBeenCalledTimes(1);
-      expect(dispatchSpy).toHaveBeenCalledWith(setSearchTermsAction({ terms }));
-    });
-  });
-
-  describe("#onLocationInput()", () => {
-    it("should call next on locationInput$", () => {
-      const nextSpy = spyOn(component.locationInput$, "next");
-
-      const event = {
-        target: {
-          value: "location",
-        },
-      };
-
-      component.onLocationInput(event);
-
-      expect(nextSpy).toHaveBeenCalledOnceWith(event.target.value);
-    });
-  });
-
-  describe("#onGroupInput()", () => {
-    it("should call next on groupInput$", () => {
-      const nextSpy = spyOn(component.groupInput$, "next");
-
-      const event = {
-        target: {
-          value: "group",
-        },
-      };
-
-      component.onGroupInput(event);
-
-      expect(nextSpy).toHaveBeenCalledOnceWith(event.target.value);
-    });
-  });
-
-  describe("#onKeywordInput()", () => {
-    it("should call next on keywordsInput$", () => {
-      const nextSpy = spyOn(component.keywordsInput$, "next");
-
-      const event = {
-        target: {
-          value: "keyword",
-        },
-      };
-
-      component.onKeywordInput(event);
-
-      expect(nextSpy).toHaveBeenCalledOnceWith(event.target.value);
-    });
-  });
-
-  describe("#onTypeInput()", () => {
-    it("should call next on typeInput$", () => {
-      const nextSpy = spyOn(component.typeInput$, "next");
-
-      const event = {
-        target: {
-          value: "type",
-        },
-      };
-
-      component.onTypeInput(event);
-
-      expect(nextSpy).toHaveBeenCalledOnceWith(event.target.value);
-    });
-  });
-
-  describe("#locationSelected()", () => {
-    it("should dispatch an AddLocationFilterAction", () => {
-      dispatchSpy = spyOn(store, "dispatch");
-
-      const location = "test";
-      component.locationSelected(location);
-
-      expect(dispatchSpy).toHaveBeenCalledTimes(1);
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        addLocationFilterAction({ location })
-      );
-    });
-  });
-
-  describe("#locationRemoved()", () => {
-    it("should dispatch a RemoveLocationFilterAction", () => {
-      dispatchSpy = spyOn(store, "dispatch");
-
-      const location = "test";
-      component.locationRemoved(location);
-
-      expect(dispatchSpy).toHaveBeenCalledTimes(1);
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        removeLocationFilterAction({ location })
-      );
-    });
-  });
-
-  describe("#groupSelected()", () => {
-    it("should dispatch an AddGroupFilterAction", () => {
-      dispatchSpy = spyOn(store, "dispatch");
-
-      const group = "test";
-      component.groupSelected(group);
-
-      expect(dispatchSpy).toHaveBeenCalledTimes(1);
-      expect(dispatchSpy).toHaveBeenCalledWith(addGroupFilterAction({ group }));
-    });
-  });
-
-  describe("#groupRemoved()", () => {
-    it("should dispatch a RemoveGroupFilterAction", () => {
-      dispatchSpy = spyOn(store, "dispatch");
-
-      const group = "test";
-      component.groupRemoved(group);
-
-      expect(dispatchSpy).toHaveBeenCalledTimes(1);
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        removeGroupFilterAction({ group })
-      );
-    });
-  });
-
-  describe("#keywordSelected()", () => {
-    it("should dispatch an AddKeywordFilterAction", () => {
-      dispatchSpy = spyOn(store, "dispatch");
-
-      const keyword = "test";
-      component.keywordSelected(keyword);
-
-      expect(dispatchSpy).toHaveBeenCalledTimes(1);
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        addKeywordFilterAction({ keyword })
-      );
-    });
-  });
-
-  describe("#keywordRemoved()", () => {
-    it("should dispatch a RemoveKeywordFilterAction", () => {
-      dispatchSpy = spyOn(store, "dispatch");
-
-      const keyword = "test";
-      component.keywordRemoved(keyword);
-
-      expect(dispatchSpy).toHaveBeenCalledTimes(1);
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        removeKeywordFilterAction({ keyword })
-      );
-    });
-  });
-
-  describe("#typeSelected()", () => {
-    it("should dispatch an AddTypeFilterAction", () => {
-      dispatchSpy = spyOn(store, "dispatch");
-
-      const datasetType = "string";
-      component.typeSelected(datasetType);
-
-      expect(dispatchSpy).toHaveBeenCalledTimes(1);
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        addTypeFilterAction({ datasetType })
-      );
-    });
-  });
-
-  describe("#typeRemoved()", () => {
-    it("should dispatch a RemoveTypeFilterAction", () => {
-      dispatchSpy = spyOn(store, "dispatch");
-
-      const datasetType = "string";
-      component.typeRemoved(datasetType);
-
-      expect(dispatchSpy).toHaveBeenCalledTimes(1);
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        removeTypeFilterAction({ datasetType })
-      );
-    });
-  });
-
-  describe("#dateChanged()", () => {
-    it("should dispatch setDateRangeFilterAction with empty string values if event.value is null", () => {
-      dispatchSpy = spyOn(store, "dispatch");
-
-      const event = {
-        targetElement: {
-          getAttribute: (name: string) => "begin",
-        },
-        value: null,
-      } as MatDatepickerInputEvent<DateTime>;
-
-      component.dateChanged(event);
-
-      expect(dispatchSpy).toHaveBeenCalledTimes(1);
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        setDateRangeFilterAction({ begin: "", end: "" })
-      );
-    });
-
-    it("should set dateRange.begin if event has value and event.targetElement name is begin", () => {
-      dispatchSpy = spyOn(store, "dispatch");
-
-      const beginDate = DateTime.fromJSDate(new Date("2021-01-01"));
-      const event = {
-        targetElement: {
-          getAttribute: (name: string) => "begin",
-        },
-        value: beginDate,
-      } as MatDatepickerInputEvent<DateTime>;
-
-      component.dateChanged(event);
-
-      const expected = beginDate.toUTC().toISO();
-      expect(component.dateRange.begin).toEqual(expected);
-      expect(dispatchSpy).not.toHaveBeenCalled();
-    });
-
-    it("should set dateRange.end if event has value and event.targetElement name is end", () => {
-      dispatchSpy = spyOn(store, "dispatch");
-
-      const endDate = DateTime.fromJSDate(new Date("2021-07-08"));
-      const event = {
-        targetElement: {
-          getAttribute: (name: string) => "end",
-        },
-        value: endDate,
-      } as MatDatepickerInputEvent<DateTime>;
-
-      component.dateChanged(event);
-
-      const expected = endDate.toUTC().plus({ days: 1 }).toISO();
-      expect(component.dateRange.end).toEqual(expected);
-      expect(dispatchSpy).not.toHaveBeenCalled();
-    });
-
-    it("should dispatch a setDateRangeFilterAction if dateRange.begin and dateRange.end have values", () => {
-      dispatchSpy = spyOn(store, "dispatch");
-
-      const beginDate = DateTime.fromJSDate(new Date("2021-01-01"));
-      const endDate = DateTime.fromJSDate(new Date("2021-07-08"));
-      component.dateRange.begin = beginDate.toUTC().toISO();
-      const event = {
-        targetElement: {
-          getAttribute: (name: string) => "end",
-        },
-        value: endDate,
-      } as MatDatepickerInputEvent<DateTime>;
-
-      component.dateChanged(event);
-
-      const expected = {
-        begin: beginDate.toUTC().toISO(),
-        end: endDate.toUTC().plus({ days: 1 }).toISO(),
-      };
-      expect(dispatchSpy).toHaveBeenCalledOnceWith(
-        setDateRangeFilterAction(expected)
-      );
-    });
-  });
-
-  describe("#clearFacets()", () => {
-    it("should dispatch a ClearFacetsAction and a deselectAllCustomColumnsAction", () => {
-      dispatchSpy = spyOn(store, "dispatch");
-
-      component.clearFacets();
-
-      expect(dispatchSpy).toHaveBeenCalledTimes(2);
+      expect(dispatchSpy).toHaveBeenCalledTimes(5);
       expect(dispatchSpy).toHaveBeenCalledWith(clearFacetsAction());
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        deselectAllCustomColumnsAction()
-      );
+      expect(dispatchSpy).toHaveBeenCalledWith(fetchDatasetsAction());
+      expect(dispatchSpy).toHaveBeenCalledWith(fetchFacetCountsAction());
     });
   });
 
-  describe("#showAddConditionDialog()", () => {
-    it("should open SearchParametersDialog, dispatch addScientificConditionAction and selectColumnAction if dialog returns data", () => {
+  describe("#showDatasetsFilterSettingsDialog()", () => {
+    it("should open DatasetsFilterSettingsComponent", async () => {
       spyOn(component.dialog, "open").and.callThrough();
       dispatchSpy = spyOn(store, "dispatch");
 
-      component.metadataKeys$ = of(["test", "keys"]);
-      component.showAddConditionDialog();
+      await component.showDatasetsFilterSettingsDialog();
 
       expect(component.dialog.open).toHaveBeenCalledTimes(1);
       expect(component.dialog.open).toHaveBeenCalledWith(
-        SearchParametersDialogComponent,
+        DatasetsFilterSettingsComponent,
         {
           data: {
-            parameterKeys: component["asyncPipe"].transform(
-              component.metadataKeys$
-            ),
+            filterConfigs: filterConfigs,
           },
-        }
-      );
-      expect(dispatchSpy).toHaveBeenCalledTimes(2);
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        addScientificConditionAction({
-          condition: {
-            lhs: "",
-            rhs: "",
-            relation: "EQUAL_TO_STRING",
-            unit: "",
-          },
-        })
-      );
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        selectColumnAction({ name: "", columnType: "custom" })
+          restoreFocus: false,
+        },
       );
     });
   });
-
-  describe("#removeCondition()", () => {
-    it("should dispatch a removeScientificConditionAction and a deselectColumnAction", () => {
+  describe("#onViewPublicChange()", () => {
+    it("should dispatch a SetPublicViewModeAction, fetchDatasetsAction, and fetchFacetCountsAction", () => {
       dispatchSpy = spyOn(store, "dispatch");
 
-      const condition: ScientificCondition = {
-        lhs: "test",
-        relation: "EQUAL_TO_NUMERIC",
-        rhs: 5,
-        unit: "s",
-      };
-      const index = 0;
-      component.removeCondition(condition, index);
+      const viewPublic = false;
+      component.onViewPublicChange(viewPublic);
 
-      expect(dispatchSpy).toHaveBeenCalledTimes(2);
+      expect(dispatchSpy).toHaveBeenCalledTimes(3);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        removeScientificConditionAction({ index })
+        setPublicViewModeAction({ isPublished: viewPublic }),
       );
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        deselectColumnAction({ name: condition.lhs, columnType: "custom" })
-      );
+      expect(dispatchSpy).toHaveBeenCalledWith(fetchDatasetsAction());
+      expect(dispatchSpy).toHaveBeenCalledWith(fetchFacetCountsAction());
     });
   });
 });

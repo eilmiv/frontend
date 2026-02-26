@@ -5,12 +5,14 @@ import {
   waitForAsync,
 } from "@angular/core/testing";
 
-import { DatasetLifecycleComponent } from "./dataset-lifecycle.component";
+import {
+  DatasetLifecycleComponent,
+  HistoryWithProperties,
+} from "./dataset-lifecycle.component";
 
 import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { PipesModule } from "shared/pipes/pipes.module";
 import { DatePipe } from "@angular/common";
-import { Dataset } from "shared/sdk";
 import { MatCardModule } from "@angular/material/card";
 import { MatIconModule } from "@angular/material/icon";
 import { MatTableModule } from "@angular/material/table";
@@ -20,6 +22,11 @@ import { NgxJsonViewerModule } from "ngx-json-viewer";
 import { Store, StoreModule } from "@ngrx/store";
 import { MockStore } from "@ngrx/store/testing";
 import { AppConfigService } from "app-config.service";
+import { createMock, mockDataset } from "shared/MockStubs";
+import {
+  HistoryClass,
+  OutputDatasetObsoleteDto,
+} from "@scicatproject/scicat-sdk-ts-angular";
 
 const historyItems = [
   {
@@ -50,33 +57,36 @@ describe("DatasetLifecycleComponent", () => {
   let component: DatasetLifecycleComponent;
   let fixture: ComponentFixture<DatasetLifecycleComponent>;
   let store: MockStore;
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        schemas: [NO_ERRORS_SCHEMA],
-        declarations: [DatasetLifecycleComponent],
-        imports: [
-          MatButtonModule,
-          MatCardModule,
-          MatIconModule,
-          MatPaginatorModule,
-          MatTableModule,
-          NgxJsonViewerModule,
-          PipesModule,
-          StoreModule.forRoot({}),
-        ],
-        providers: [
-          DatePipe,
-          { provide: AppConfigService, useValue: { getConfig } },
-        ],
-      }).compileComponents();
-    })
-  );
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      schemas: [NO_ERRORS_SCHEMA],
+      declarations: [DatasetLifecycleComponent],
+      imports: [
+        MatButtonModule,
+        MatCardModule,
+        MatIconModule,
+        MatPaginatorModule,
+        MatTableModule,
+        NgxJsonViewerModule,
+        PipesModule,
+        StoreModule.forRoot({}),
+      ],
+      providers: [
+        DatePipe,
+        { provide: AppConfigService, useValue: { getConfig } },
+      ],
+    }).compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(DatasetLifecycleComponent);
     component = fixture.componentInstance;
-    component.dataset = { pid: "testPid", history: [] } as unknown as Dataset;
+    component.dataset = createMock<
+      OutputDatasetObsoleteDto & { history: HistoryClass[] }
+    >({
+      pid: "testPid",
+      history: [],
+    });
     fixture.detectChanges();
   });
   beforeEach(inject([Store], (mockStore: MockStore) => {
@@ -116,7 +126,7 @@ describe("DatasetLifecycleComponent", () => {
 
     it("should parse dataset.history into a HistoryItem array if dataset is defined", () => {
       const keywords = ["test", "parse"];
-      const dataset = new Dataset();
+      const dataset = createMock<OutputDatasetObsoleteDto>({ ...mockDataset });
       dataset.history = [
         {
           id: "testId",
@@ -124,14 +134,14 @@ describe("DatasetLifecycleComponent", () => {
           updatedBy: "Test User",
           updatedAt: new Date().toISOString(),
         },
-      ];
+      ] as HistoryWithProperties[];
 
       component.dataset = dataset;
       const parsedHistoryItems = component["parseHistoryItems"]();
 
       expect(parsedHistoryItems.length).toEqual(1);
       parsedHistoryItems.forEach((item) => {
-        expect(Object.keys(item).includes("id")).toEqual(false);
+        expect("id" in item).toBe(false);
         expect(item.property).toEqual("keywords");
         expect(item.value).toEqual(keywords);
       });
@@ -142,7 +152,7 @@ describe("DatasetLifecycleComponent", () => {
     it("should create and download a csv file", () => {
       const spyObj = jasmine.createSpyObj("a", ["click", "remove"]);
       const createElementSpy = spyOn(document, "createElement").and.returnValue(
-        spyObj
+        spyObj,
       );
       const url = "testUrl";
       spyOn(window.URL, "createObjectURL").and.returnValue(url);
@@ -198,7 +208,7 @@ const createCsvBlob = () => {
           }
         }
       })
-      .join(";")
+      .join(";"),
   );
   csv.unshift(header.join(";"));
   const csvArray = csv.join("\r\n");

@@ -2,55 +2,113 @@ import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { ComponentFixture, TestBed, waitForAsync } from "@angular/core/testing";
 import { ReactiveFormsModule } from "@angular/forms";
 import { DatafilesComponent } from "./datafiles.component";
-import { UserApi } from "shared/sdk";
 import { MatTableModule } from "@angular/material/table";
 import { PipesModule } from "shared/pipes/pipes.module";
 import { RouterModule } from "@angular/router";
 import { StoreModule } from "@ngrx/store";
 import { CheckboxEvent } from "shared/modules/table/table.component";
-import { MockMatDialogRef, MockUserApi } from "shared/MockStubs";
+import {
+  MockAuthService,
+  MockDatafilesActionsComponent,
+  MockMatDialogRef,
+  MockUserApi,
+} from "shared/MockStubs";
 import { MatCheckboxChange } from "@angular/material/checkbox";
 import { MatIconModule } from "@angular/material/icon";
 import { MatButtonModule } from "@angular/material/button";
 import { AppConfigService } from "app-config.service";
 import { MatDialogModule, MatDialogRef } from "@angular/material/dialog";
+import { ConfigurableActionsComponent } from "shared/modules/configurable-actions/configurable-actions.component";
+import { UsersService } from "@scicatproject/scicat-sdk-ts-angular";
+import { AuthService } from "shared/services/auth/auth.service";
+import { FileSizePipe } from "shared/pipes/filesize.pipe";
 
 describe("DatafilesComponent", () => {
   let component: DatafilesComponent;
   let fixture: ComponentFixture<DatafilesComponent>;
 
-  const getConfig = () => ({});
+  const getConfig = () => ({
+    datafilesActionsEnabled: true,
+    datafilesActions: [
+      {
+        id: "eed8efec-4354-11ef-a3b5-d75573a5d37f",
+        order: 4,
+        label: "Download All",
+        files: "all",
+        mat_icon: "download",
+        url: "",
+        target: "_blank",
+        enabled: "#SizeLimit",
+        authorization: ["#datasetAccess", "#datasetPublic"],
+      },
+      {
+        id: "3072fafc-4363-11ef-b9f9-ebf568222d26",
+        order: 3,
+        label: "Download Selected",
+        files: "selected",
+        mat_icon: "download",
+        url: "",
+        target: "_blank",
+        enabled: "#Selected && #SizeLimit",
+        authorization: ["#datasetAccess", "#datasetPublic"],
+      },
+      {
+        id: "4f974f0e-4364-11ef-9c63-03d19f813f4e",
+        order: 2,
+        label: "Notebook All",
+        files: "all",
+        icon: "/assets/icons/jupyter_logo.png",
+        url: "",
+        target: "_blank",
+        authorization: ["#datasetAccess", "#datasetPublic"],
+      },
+      {
+        id: "fa3ce6ee-482d-11ef-95e9-ff2c80dd50bd",
+        order: 1,
+        label: "Notebook Selected",
+        files: "selected",
+        icon: "/assets/icons/jupyter_logo.png",
+        url: "",
+        target: "_blank",
+        enabled: "#Selected",
+        authorization: ["#datasetAccess", "#datasetPublic"],
+      },
+    ],
+  });
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        schemas: [NO_ERRORS_SCHEMA],
-        imports: [
-          MatButtonModule,
-          MatIconModule,
-          MatTableModule,
-          PipesModule,
-          ReactiveFormsModule,
-          MatDialogModule,
-          RouterModule,
-          RouterModule.forRoot([], { relativeLinkResolution: "legacy" }),
-          StoreModule.forRoot({}),
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      schemas: [NO_ERRORS_SCHEMA],
+      imports: [
+        MatButtonModule,
+        MatIconModule,
+        MatTableModule,
+        PipesModule,
+        ReactiveFormsModule,
+        MatDialogModule,
+        RouterModule,
+        RouterModule.forRoot([]),
+        StoreModule.forRoot({}),
+      ],
+      declarations: [DatafilesComponent],
+    });
+    TestBed.overrideComponent(DatafilesComponent, {
+      set: {
+        providers: [
+          { provide: UsersService, useClass: MockUserApi },
+          { provide: MatDialogRef, useClass: MockMatDialogRef },
+          { provide: AppConfigService, useValue: { getConfig } },
+          { provide: AuthService, useValue: MockAuthService },
+          {
+            provide: ConfigurableActionsComponent,
+            useClass: MockDatafilesActionsComponent,
+          },
+          { provide: FileSizePipe },
         ],
-        declarations: [DatafilesComponent],
-      });
-      TestBed.overrideComponent(DatafilesComponent, {
-        set: {
-          providers: [
-            { provide: UserApi, useClass: MockUserApi },
-            { provide: MatDialogRef, useClass: MockMatDialogRef },
-            { provide: AppConfigService, useValue: { getConfig } },
-            { provide: UserApi, useClass: MockUserApi },
-          ],
-        },
-      });
-      TestBed.compileComponents();
-    })
-  );
+      },
+    });
+    TestBed.compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(DatafilesComponent);
@@ -73,6 +131,7 @@ describe("DatafilesComponent", () => {
         gid: "string",
         perm: "string",
         selected: false,
+        hash: "",
       },
       {
         path: "test2",
@@ -83,10 +142,11 @@ describe("DatafilesComponent", () => {
         gid: "string",
         perm: "string",
         selected: false,
+        hash: "",
       },
     ];
     component.tableData = component.files;
-    component.sourcefolder = "/test/";
+    component.sourceFolder = "/test/";
     fixture.detectChanges();
   });
 

@@ -1,6 +1,32 @@
+/* eslint @typescript-eslint/no-empty-function:0 */
+
 import { Observable, of } from "rxjs";
 import { convertToParamMap, UrlTree } from "@angular/router";
-import { User, UserIdentity } from "state-management/models";
+import { AppConfig } from "app-config.module";
+import { SciCatDataSource } from "./services/scicat.datasource";
+import {
+  ActionConfig,
+  ActionItems,
+} from "shared/modules/configurable-actions/configurable-action.interfaces";
+import { DataFiles_File } from "datasets/datafiles/datafiles.interfaces";
+import {
+  Instrument,
+  OutputJobV3Dto,
+  OutputDatasetObsoleteDto,
+  ProposalClass,
+  PublishedData,
+  SampleClass,
+  Logbook,
+  Policy,
+  ReturnedUserDto,
+  OrigDatablock,
+  OutputAttachmentV3Dto,
+} from "@scicatproject/scicat-sdk-ts-angular";
+import { SDKToken } from "./services/auth/auth.service";
+import { IngestionRequestInformation } from "ingestor/ingestor-page/helper/ingestor.component-helper";
+import { MethodItem } from "./sdk/models/ingestor/methodItem";
+import { FolderNode } from "./sdk/models/ingestor/folderNode";
+import { APIInformation } from "ingestor/ingestor-page/helper/ingestor.component-helper";
 
 export class MockUserApi {
   getCurrentId() {
@@ -19,25 +45,70 @@ export class MockUserApi {
     return { username: "admin" };
   }
 
-  jwt() {
+  usersControllerGetUserJWTV3() {
     return of("");
   }
 }
 
+export class MockAuthService {
+  private token = new SDKToken();
+
+  protected load(prop: string) {
+    return "";
+  }
+
+  protected persist(
+    prop: string,
+    value: string | number | Date | boolean,
+    expires?: Date,
+  ): void {}
+
+  public clear(): void {}
+
+  public setRememberMe(value: boolean): void {}
+
+  public setUser(user: ReturnedUserDto) {
+    this.save();
+  }
+
+  public setToken(token: SDKToken): void {
+    this.save();
+  }
+
+  public getToken(): SDKToken {
+    return this.token;
+  }
+
+  public getAccessTokenId(): string {
+    return this.token.id;
+  }
+
+  public getCurrentUserId() {
+    return this.token.userId;
+  }
+
+  public getCurrentUserData() {
+    return typeof this.token.user === "string"
+      ? JSON.parse(this.token.user)
+      : this.token.user;
+  }
+
+  public isAuthenticated() {
+    return !(
+      this.getCurrentUserId() === "" ||
+      this.getCurrentUserId() == null ||
+      this.getCurrentUserId() == "null"
+    );
+  }
+
+  public save(): boolean {
+    return true;
+  }
+}
+
 export class MockUserIdentityApi {
-  findOne(): Observable<UserIdentity> {
-    return of({
-      id: "",
-      userId: "",
-      user: new User(),
-      externalId: "name",
-      provider: "ldap",
-      authScheme: "",
-      credentials: "",
-      created: new Date(),
-      modified: new Date(),
-      profile: { email: "test@email.com" },
-    });
+  isValidEmail(): Observable<boolean> {
+    return of(true);
   }
 }
 
@@ -50,15 +121,15 @@ export class MockDatasetApi {
     return of([]);
   }
 
-  find() {
+  datasetsControllerFindAllV3() {
     return of([]);
   }
 
-  findById() {
+  datasetsControllerFindByIdV3() {
     return of([]);
   }
 
-  count(data?: any) {
+  datasetsControllerCountV3(data?: any) {
     return of(0);
   }
 }
@@ -87,7 +158,7 @@ export class MockActivatedRoute {
 
 export class MockRouter {
   events = new Observable((observer) => {
-    observer.next();
+    observer.next(null);
     observer.complete();
   });
   navigate = () => {};
@@ -113,10 +184,20 @@ export class MockConfigService {
   }
 }
 
+export class MockAppConfigService {
+  private appConfig: object = {};
+  constructor(private http: null) {}
+
+  async loadAppConfig(): Promise<void> {}
+  getConfig(): AppConfig {
+    return this.appConfig as AppConfig;
+  }
+}
+
 export class MockStore {
   public dispatch() {}
 
-  public select() {
+  public select(selector) {
     return of([]);
   }
 
@@ -134,7 +215,7 @@ export class MockArchivingService {
 }
 
 export class MockPublishedDataApi {
-  findbyId() {
+  publishedDataControllerFindOneV3() {
     return of({
       creator: "string",
       publicationYear: "string",
@@ -145,7 +226,7 @@ export class MockPublishedDataApi {
     });
   }
 
-  find() {
+  publishedDataControllerFindAllV3() {
     return of([
       {
         creator: "string",
@@ -158,7 +239,198 @@ export class MockPublishedDataApi {
     ]);
   }
 
-  formPopulate() {
+  publishedDataControllerFormPopulateV3() {
     return of({});
   }
 }
+export class MockScicatDataSource extends SciCatDataSource {
+  loadAllData(
+    filterExpressions?: any,
+    sortField?: string,
+    sortDirection = "asc",
+    pageIndex = 0,
+    pageSize = 10,
+    isFilesDashboard?: boolean,
+  ) {
+    return {};
+  }
+  loadExportData(
+    filterExpressions?: any,
+    sortField?: string,
+    sortDirection = "asc",
+  ) {
+    return {};
+  }
+}
+
+export class MockDatafilesActionsComponent {
+  actionsConfig: ActionConfig[];
+  actionItems: ActionItems;
+  files: DataFiles_File[];
+  visible: boolean;
+}
+
+export class MockHtmlElement {
+  id = "";
+  tag = "HTML";
+  innerHTML = "";
+  value = "";
+  name = "";
+  disabled = false;
+  style: unknown = { display: "block", backgroundColor: "red" };
+  children: MockHtmlElement[] = [];
+
+  constructor(tag = "", id = "") {
+    this.id = id;
+    this.tag = tag;
+  }
+  createElement(t: string, id = "") {
+    return new MockHtmlElement(t, id);
+  }
+  appendChild(x: MockHtmlElement) {
+    this.children.push(x);
+    return x;
+  }
+  clear() {
+    this.children = [];
+  }
+  querySelector(sel: string) {
+    // too hard to implement correctly, so just hack something
+    const list = this.getElementsByTagName(sel);
+    return list.length > 0 ? list[0] : this.children[0];
+  }
+  querySelectorAll(sel: string) {
+    // too hard to implement correctly, so just return all children
+    return this.children;
+  }
+  getElementById(id: string): any {
+    // if not found, just CREATE one!!
+    return (
+      this.children.find((x) => x.id == id) ||
+      this.appendChild(this.createElement("", id))
+    );
+  }
+  getElementsByClassName(classname: string): any[] {
+    return this.children.filter((x: any) => x.classList.contains(classname));
+  }
+  getElementsByName(name: string): any[] {
+    return this.children.filter((x: any) => x.name == name);
+  }
+  getElementsByTagName(tag: string): any[] {
+    return this.children.filter((x: any) => x.tag == tag.toUpperCase());
+  }
+  submit() {}
+}
+
+export function createMock<T>(data?: Partial<T>): T {
+  return data as T;
+}
+
+export const mockDataset = createMock<OutputDatasetObsoleteDto>({});
+export const mockAttachment = createMock<OutputAttachmentV3Dto>({});
+export const mockSample = createMock<SampleClass>({});
+export const mockProposal = createMock<ProposalClass>({});
+export const mockInstrument = createMock<Instrument>({});
+export const mockOrigDatablock = createMock<OrigDatablock>({});
+export const mockJob = createMock<OutputJobV3Dto>({});
+export const mockLogbook = createMock<Logbook>({});
+export const mockPolicy = createMock<Policy>({});
+export const mockPublishedData = createMock<PublishedData>({});
+export const mockUser = createMock<ReturnedUserDto>({});
+
+export const mockIngestionRequestInformation =
+  createMock<IngestionRequestInformation>({
+    selectedPath: "/test/path",
+    selectedMethod: {
+      name: "test-method",
+      schema: "base64-encoded-schema",
+      url: "https://json-schema.org/draft/2020-12/schema",
+    },
+    selectedResolvedDecodedSchema: {
+      type: "object",
+      properties: {
+        organizational: { type: "object" },
+        sample: { type: "object" },
+        instrument: { type: "object" },
+        acquisition: { type: "object" },
+      },
+    },
+    scicatHeader: {
+      datasetName: "test-dataset",
+      sourceFolder: "/test/path",
+      type: "raw",
+      owner: "testuser",
+    },
+    userMetaData: {
+      organizational: {
+        experimentId: "EXP-001",
+      },
+      sample: {
+        sampleId: "SAMPLE-001",
+      },
+    },
+    extractorMetaData: {
+      instrument: {
+        name: "Test Instrument",
+      },
+      acquisition: {
+        date: "2024-01-01",
+      },
+    },
+    customMetaData: {},
+    mergedMetaDataString: "{}",
+    editorMode: "INGESTION",
+    ingestionRequest: null,
+    autoArchive: false,
+  });
+
+export const mockMethodItem = createMock<MethodItem>({
+  name: "test-extraction-method",
+  schema: "eyJ0eXBlIjoib2JqZWN0IiwicHJvcGVydGllcyI6e319",
+  url: "https://json-schema.org/draft/2020-12/schema",
+});
+
+export const mockMethodItem2 = createMock<MethodItem>({
+  name: "another-method",
+  schema: "eyJwcm9wZXJ0aWVzIjp7Imluc3RydW1lbnQiOnt9fX0=",
+  url: "https://json-schema.org/draft/2020-12/schema2",
+});
+
+export const mockMethodItems: MethodItem[] = [mockMethodItem, mockMethodItem2];
+
+export const mockFolderNode = createMock<FolderNode>({
+  name: "test-folder",
+  path: "/test/path/test-folder",
+  children: true,
+  probablyDataset: false,
+});
+
+export const mockDatasetFolderNode = createMock<FolderNode>({
+  name: "dataset-folder",
+  path: "/test/path/dataset-folder",
+  children: false,
+  probablyDataset: true,
+});
+
+export const mockRootFolderNode = createMock<FolderNode>({
+  name: "",
+  path: "/",
+  children: true,
+  probablyDataset: false,
+});
+
+export const mockFolderNodes: FolderNode[] = [
+  mockFolderNode,
+  mockDatasetFolderNode,
+  mockRootFolderNode,
+];
+
+export const mockAPIInformation = createMock<APIInformation>({
+  ingestionDatasetLoading: false,
+  extractorMetaDataReady: false,
+  extractMetaDataRequested: false,
+  metaDataExtractionFailed: false,
+  extractorMetadataProgress: 0,
+  extractorMetaDataStatus: "",
+  ingestionRequestErrorMessage: "",
+});

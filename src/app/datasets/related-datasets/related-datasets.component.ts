@@ -7,25 +7,35 @@ import {
   PageChangeEvent,
   TableColumn,
 } from "shared/modules/table/table.component";
-import { Dataset } from "shared/sdk";
+import {
+  DatasetClass,
+  OutputDatasetObsoleteDto,
+} from "@scicatproject/scicat-sdk-ts-angular";
 import {
   changeRelatedDatasetsPageAction,
   fetchRelatedDatasetsAction,
 } from "state-management/actions/datasets.actions";
-import { selectRelatedDatasetsPageViewModel } from "state-management/selectors/datasets.selectors";
+import {
+  selectRelatedDatasetsCurrentPage,
+  selectRelatedDatasetsPageViewModel,
+  selectRelatedDatasetsPerPage,
+} from "state-management/selectors/datasets.selectors";
 
 @Component({
   selector: "app-related-datasets",
   templateUrl: "./related-datasets.component.html",
   styleUrls: ["./related-datasets.component.scss"],
+  standalone: false,
 })
 export class RelatedDatasetsComponent {
   vm$ = this.store.select(selectRelatedDatasetsPageViewModel).pipe(
     map((vm) => ({
       ...vm,
       relatedDatasets: this.formatTableData(vm.relatedDatasets),
-    }))
+    })),
   );
+  currentPage$ = this.store.select(selectRelatedDatasetsCurrentPage);
+  datasetsPerPage$ = this.store.select(selectRelatedDatasetsPerPage);
 
   tablePaginate = true;
   tableColumns: TableColumn[] = [
@@ -70,10 +80,12 @@ export class RelatedDatasetsComponent {
   constructor(
     private datePipe: DatePipe,
     private router: Router,
-    private store: Store
-  ) { }
+    private store: Store,
+  ) {}
 
-  formatTableData(datasets: Dataset[]): Record<string, unknown>[] {
+  formatTableData(
+    datasets: OutputDatasetObsoleteDto[],
+  ): Record<string, unknown>[] {
     if (!datasets) {
       return [];
     }
@@ -86,7 +98,7 @@ export class RelatedDatasetsComponent {
       type: dataset.type,
       creationTime: this.datePipe.transform(
         dataset.creationTime,
-        "yyyy-MM-dd, hh:mm"
+        "yyyy-MM-dd, hh:mm",
       ),
       owner: dataset.owner,
     }));
@@ -97,12 +109,12 @@ export class RelatedDatasetsComponent {
       changeRelatedDatasetsPageAction({
         page: event.pageIndex,
         limit: event.pageSize,
-      })
+      }),
     );
     this.store.dispatch(fetchRelatedDatasetsAction());
   }
 
-  onRowClick(dataset: Dataset): void {
+  onRowClick(dataset: DatasetClass): void {
     const pid = encodeURIComponent(dataset.pid);
     this.router.navigateByUrl("/datasets/" + pid);
   }

@@ -1,13 +1,5 @@
-import { Observable } from "rxjs";
+import { of, throwError } from "rxjs";
 import { SampleEffects } from "./samples.effects";
-import {
-  SampleApi,
-  DatasetApi,
-  SampleInterface,
-  Sample,
-  Dataset,
-  Attachment,
-} from "shared/sdk";
 import { TestBed } from "@angular/core/testing";
 import { provideMockActions } from "@ngrx/effects/testing";
 import { provideMockStore } from "@ngrx/store/testing";
@@ -22,18 +14,34 @@ import {
   loadingCompleteAction,
 } from "state-management/actions/user.actions";
 import { Type } from "@angular/core";
+import {
+  DatasetsService,
+  SampleClass,
+  SamplesService,
+} from "@scicatproject/scicat-sdk-ts-angular";
+import { TestObservable } from "jasmine-marbles/src/test-observables";
+import {
+  createMock,
+  mockDataset as dataset,
+  mockAttachment as attachment,
+} from "shared/MockStubs";
 
-const data: SampleInterface = {
+const sample = createMock<SampleClass>({
   sampleId: "testId",
   ownerGroup: "testGroup",
-};
-const sample = new Sample(data);
+  createdBy: "",
+  updatedBy: "",
+  createdAt: new Date().toString(),
+  updatedAt: new Date().toString(),
+  accessGroups: [],
+  isPublished: false,
+});
 
 describe("SampleEffects", () => {
-  let actions: Observable<any>;
+  let actions: TestObservable;
   let effects: SampleEffects;
-  let sampleApi: jasmine.SpyObj<SampleApi>;
-  let datasetApi: jasmine.SpyObj<DatasetApi>;
+  let sampleApi: jasmine.SpyObj<SamplesService>;
+  let datasetApi: jasmine.SpyObj<DatasetsService>;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
@@ -44,34 +52,37 @@ describe("SampleEffects", () => {
           selectors: [
             {
               selector: selectFullqueryParams,
-              value: { query: JSON.stringify({ text: "" }) },
+              value: { query: { text: "" } },
             },
             { selector: selectDatasetsQueryParams, value: {} },
           ],
         }),
         {
-          provide: SampleApi,
+          provide: SamplesService,
           useValue: jasmine.createSpyObj("sampleApi", [
-            "fullquery",
-            "findOne",
-            "metadataKeys",
-            "patchAttributes",
-            "create",
-            "createAttachments",
-            "updateByIdAttachments",
-            "destroyByIdAttachments",
+            "samplesControllerFullqueryV3",
+            "samplesControllerCountV3",
+            "samplesControllerFindByIdV3",
+            "samplesControllerFindByIdAccessV3",
+            "samplesControllerMetadataKeysV3",
+            "samplesControllerUpdateV3",
+            "samplesControllerCreateV3",
+            "samplesControllerCreateAttachmentsV3",
+            "samplesControllerFindOneAttachmentAndRemoveV3",
           ]),
         },
         {
-          provide: DatasetApi,
-          useValue: jasmine.createSpyObj("datasetApi", ["find"]),
+          provide: DatasetsService,
+          useValue: jasmine.createSpyObj("datasetApi", [
+            "datasetsControllerFindAllV3",
+          ]),
         },
       ],
     });
 
     effects = TestBed.inject(SampleEffects);
-    sampleApi = injectedStub(SampleApi);
-    datasetApi = injectedStub(DatasetApi);
+    sampleApi = injectedStub(SamplesService);
+    datasetApi = injectedStub(DatasetsService);
   });
 
   const injectedStub = <S>(service: Type<S>): jasmine.SpyObj<S> =>
@@ -87,7 +98,7 @@ describe("SampleEffects", () => {
 
         actions = hot("-a", { a: action });
         const response = cold("-a|", { a: samples });
-        sampleApi.fullquery.and.returnValue(response);
+        sampleApi.samplesControllerFullqueryV3.and.returnValue(response);
 
         const expected = cold("--(bc)", { b: outcome1, c: outcome2 });
         expect(effects.fetchSamples$).toBeObservable(expected);
@@ -99,99 +110,7 @@ describe("SampleEffects", () => {
 
         actions = hot("-a", { a: action });
         const response = cold("-#", {});
-        sampleApi.fullquery.and.returnValue(response);
-
-        const expected = cold("--b", { b: outcome });
-        expect(effects.fetchSamples$).toBeObservable(expected);
-      });
-    });
-
-    describe("ofType changePageAction", () => {
-      const page = 1;
-      const limit = 25;
-
-      it("should result in a fetchSamplesCompleteAction and a fetchSamplesCountAction", () => {
-        const samples = [sample];
-        const action = fromActions.changePageAction({ page, limit });
-        const outcome1 = fromActions.fetchSamplesCompleteAction({ samples });
-        const outcome2 = fromActions.fetchSamplesCountAction();
-
-        actions = hot("-a", { a: action });
-        const response = cold("-a|", { a: samples });
-        sampleApi.fullquery.and.returnValue(response);
-
-        const expected = cold("--(bc)", { b: outcome1, c: outcome2 });
-        expect(effects.fetchSamples$).toBeObservable(expected);
-      });
-
-      it("should result in a fetchSamplesFailedAction", () => {
-        const action = fromActions.changePageAction({ page, limit });
-        const outcome = fromActions.fetchSamplesFailedAction();
-
-        actions = hot("-a", { a: action });
-        const response = cold("-#", {});
-        sampleApi.fullquery.and.returnValue(response);
-
-        const expected = cold("--b", { b: outcome });
-        expect(effects.fetchSamples$).toBeObservable(expected);
-      });
-    });
-
-    describe("ofType sortByColumnAction", () => {
-      const column = "test";
-      const direction = "desc";
-
-      it("should result in a fetchSamplesCompleteAction and a fetchSamplesCountAction", () => {
-        const samples = [sample];
-        const action = fromActions.sortByColumnAction({ column, direction });
-        const outcome1 = fromActions.fetchSamplesCompleteAction({ samples });
-        const outcome2 = fromActions.fetchSamplesCountAction();
-
-        actions = hot("-a", { a: action });
-        const response = cold("-a|", { a: samples });
-        sampleApi.fullquery.and.returnValue(response);
-
-        const expected = cold("--(bc)", { b: outcome1, c: outcome2 });
-        expect(effects.fetchSamples$).toBeObservable(expected);
-      });
-
-      it("should result in a fetchSamplesFailedAction", () => {
-        const action = fromActions.sortByColumnAction({ column, direction });
-        const outcome = fromActions.fetchSamplesFailedAction();
-
-        actions = hot("-a", { a: action });
-        const response = cold("-#", {});
-        sampleApi.fullquery.and.returnValue(response);
-
-        const expected = cold("--b", { b: outcome });
-        expect(effects.fetchSamples$).toBeObservable(expected);
-      });
-    });
-
-    describe("ofType setTextFilterAction", () => {
-      const text = "test";
-
-      it("should result in a fetchSamplesCompleteAction and a fetchSamplesCountAction", () => {
-        const samples = [sample];
-        const action = fromActions.setTextFilterAction({ text });
-        const outcome1 = fromActions.fetchSamplesCompleteAction({ samples });
-        const outcome2 = fromActions.fetchSamplesCountAction();
-
-        actions = hot("-a", { a: action });
-        const response = cold("-a|", { a: samples });
-        sampleApi.fullquery.and.returnValue(response);
-
-        const expected = cold("--(bc)", { b: outcome1, c: outcome2 });
-        expect(effects.fetchSamples$).toBeObservable(expected);
-      });
-
-      it("should result in a fetchSamplesFailedAction", () => {
-        const action = fromActions.setTextFilterAction({ text });
-        const outcome = fromActions.fetchSamplesFailedAction();
-
-        actions = hot("-a", { a: action });
-        const response = cold("-#", {});
-        sampleApi.fullquery.and.returnValue(response);
+        sampleApi.samplesControllerFullqueryV3.and.returnValue(response);
 
         const expected = cold("--b", { b: outcome });
         expect(effects.fetchSamples$).toBeObservable(expected);
@@ -208,8 +127,8 @@ describe("SampleEffects", () => {
       });
 
       actions = hot("-a", { a: action });
-      const response = cold("-a|", { a: samples });
-      sampleApi.fullquery.and.returnValue(response);
+      const response = cold("-a|", { a: { count: samples.length } });
+      sampleApi.samplesControllerCountV3.and.returnValue(response);
 
       const expected = cold("--b", { b: outcome });
       expect(effects.fetchCount$).toBeObservable(expected);
@@ -221,7 +140,7 @@ describe("SampleEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-#", {});
-      sampleApi.fullquery.and.returnValue(response);
+      sampleApi.samplesControllerCountV3.and.returnValue(response);
 
       const expected = cold("--b", { b: outcome });
       expect(effects.fetchCount$).toBeObservable(expected);
@@ -237,10 +156,11 @@ describe("SampleEffects", () => {
       });
 
       actions = hot("-a", { a: action });
-      const response = cold("-a|", { a: metadataKeys });
-      sampleApi.metadataKeys.and.returnValue(response);
+      sampleApi.samplesControllerMetadataKeysV3.and.returnValue(
+        cold("-b|", { b: metadataKeys }),
+      );
 
-      const expected = cold("--b", { b: outcome });
+      const expected = cold("--c", { c: outcome });
       expect(effects.fetchMetadataKeys$).toBeObservable(expected);
     });
 
@@ -250,7 +170,7 @@ describe("SampleEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-#", {});
-      sampleApi.metadataKeys.and.returnValue(response);
+      sampleApi.samplesControllerMetadataKeysV3.and.returnValue(response);
 
       const expected = cold("--b", { b: outcome });
       expect(effects.fetchMetadataKeys$).toBeObservable(expected);
@@ -259,29 +179,73 @@ describe("SampleEffects", () => {
 
   describe("fetchSample$", () => {
     const sampleId = "testId";
+    // TODO: Try to fix the any types here
+    const permission = {
+      accepted: { canAccess: true } as any,
+      rejected: { canAccess: false } as any,
+    };
 
     it("should result in a fetchSampleCompleteAction", () => {
       const action = fromActions.fetchSampleAction({ sampleId });
       const outcome = fromActions.fetchSampleCompleteAction({ sample });
 
-      actions = hot("-a", { a: action });
-      const response = cold("-a|", { a: sample });
-      sampleApi.findOne.and.returnValue(response);
+      sampleApi.samplesControllerFindByIdAccessV3
+        .withArgs(sampleId)
+        .and.returnValue(of(permission.accepted));
+      sampleApi.samplesControllerFindByIdV3
+        .withArgs(encodeURIComponent(sampleId))
+        .and.returnValue(of(sample as any));
 
-      const expected = cold("--b", { b: outcome });
+      actions = hot("a", { a: action });
+      const expected = cold("b", { b: outcome });
+
       expect(effects.fetchSample$).toBeObservable(expected);
     });
 
     it("should result in a fetchSampleFailedAction", () => {
       const action = fromActions.fetchSampleAction({ sampleId });
-      const outcome = fromActions.fetchSampleFailedAction();
+      const failure = fromActions.fetchSampleFailedAction();
 
-      actions = hot("-a", { a: action });
-      const response = cold("-#", {});
-      sampleApi.findOne.and.returnValue(response);
+      sampleApi.samplesControllerFindByIdAccessV3
+        .withArgs(sampleId)
+        .and.returnValue(of(permission.accepted));
+      sampleApi.samplesControllerFindByIdV3.and.returnValue(
+        throwError(() => new Error()),
+      );
 
-      const expected = cold("--b", { b: outcome });
+      actions = hot("a", { a: action });
+      const expected = cold("b", { b: failure });
+
       expect(effects.fetchSample$).toBeObservable(expected);
+    });
+
+    it("should do nothing if findByIdAccess returns false", () => {
+      const action = fromActions.fetchSampleAction({ sampleId });
+
+      sampleApi.samplesControllerFindByIdAccessV3
+        .withArgs(sampleId)
+        .and.returnValue(of(permission.rejected));
+
+      actions = hot("a", { a: action });
+      const expected = cold("------");
+
+      expect(effects.fetchSample$).toBeObservable(expected);
+      expect(sampleApi.samplesControllerFindByIdV3).not.toHaveBeenCalled();
+    });
+
+    it("should result in fetchSampleAccessFailedAction if findByIdAccess failed", () => {
+      const action = fromActions.fetchSampleAction({ sampleId });
+      const failure = fromActions.fetchSampleAccessFailedAction();
+
+      sampleApi.samplesControllerFindByIdAccessV3
+        .withArgs(sampleId)
+        .and.returnValue(throwError(() => new Error()));
+
+      actions = hot("a", { a: action });
+      const expected = cold("b", { b: failure });
+
+      expect(effects.fetchSample$).toBeObservable(expected);
+      expect(sampleApi.samplesControllerFindByIdV3).not.toHaveBeenCalled();
     });
   });
 
@@ -289,7 +253,7 @@ describe("SampleEffects", () => {
     const sampleId = "testId";
 
     it("should result in a fetchSampleDatasetsCompleteAction and a fetchSampleDatasetsCountAction", () => {
-      const datasets = [new Dataset()];
+      const datasets = [dataset];
       const action = fromActions.fetchSampleDatasetsAction({ sampleId });
       const outcome1 = fromActions.fetchSampleDatasetsCompleteAction({
         datasets,
@@ -298,7 +262,7 @@ describe("SampleEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-a|", { a: datasets });
-      datasetApi.find.and.returnValue(response);
+      datasetApi.datasetsControllerFindAllV3.and.returnValue(response);
 
       const expected = cold("--(bc)", { b: outcome1, c: outcome2 });
       expect(effects.fetchSampleDatasets$).toBeObservable(expected);
@@ -310,7 +274,7 @@ describe("SampleEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-#", {});
-      datasetApi.find.and.returnValue(response);
+      datasetApi.datasetsControllerFindAllV3.and.returnValue(response);
 
       const expected = cold("--b", { b: outcome });
       expect(effects.fetchSampleDatasets$).toBeObservable(expected);
@@ -322,7 +286,7 @@ describe("SampleEffects", () => {
 
     it("should result in a fetchSampleDatasetsCountCompleteAction", () => {
       const count = 1;
-      const datasets = [new Dataset()];
+      const datasets = [dataset];
       const action = fromActions.fetchSampleDatasetsCountAction({ sampleId });
       const outcome = fromActions.fetchSampleDatasetsCountCompleteAction({
         count,
@@ -330,7 +294,7 @@ describe("SampleEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-a|", { a: datasets });
-      datasetApi.find.and.returnValue(response);
+      datasetApi.datasetsControllerFindAllV3.and.returnValue(response);
 
       const expected = cold("--b", { b: outcome });
       expect(effects.fetchSampleDatasetsCount$).toBeObservable(expected);
@@ -342,7 +306,7 @@ describe("SampleEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-#", {});
-      datasetApi.find.and.returnValue(response);
+      datasetApi.datasetsControllerFindAllV3.and.returnValue(response);
 
       const expected = cold("--b", { b: outcome });
       expect(effects.fetchSampleDatasetsCount$).toBeObservable(expected);
@@ -357,7 +321,7 @@ describe("SampleEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-a|", { a: sample });
-      sampleApi.create.and.returnValue(response);
+      sampleApi.samplesControllerCreateV3.and.returnValue(response);
 
       const expected = cold("--(bc)", { b: outcome1, c: outcome2 });
       expect(effects.addSample$).toBeObservable(expected);
@@ -369,7 +333,7 @@ describe("SampleEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-#", {});
-      sampleApi.create.and.returnValue(response);
+      sampleApi.samplesControllerCreateV3.and.returnValue(response);
 
       const expected = cold("--b", { b: outcome });
       expect(effects.addSample$).toBeObservable(expected);
@@ -388,7 +352,7 @@ describe("SampleEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-a|", { a: sample });
-      sampleApi.patchAttributes.and.returnValue(response);
+      sampleApi.samplesControllerUpdateV3.and.returnValue(response);
 
       const expected = cold("--b", { b: outcome });
       expect(effects.saveCharacteristics$).toBeObservable(expected);
@@ -405,7 +369,7 @@ describe("SampleEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-#", {});
-      sampleApi.patchAttributes.and.returnValue(response);
+      sampleApi.samplesControllerUpdateV3.and.returnValue(response);
 
       const expected = cold("--b", { b: outcome });
       expect(effects.saveCharacteristics$).toBeObservable(expected);
@@ -413,15 +377,13 @@ describe("SampleEffects", () => {
   });
 
   describe("addAttachment$", () => {
-    const attachment = new Attachment();
-
     it("should result in a addAttachmentCompleteAction", () => {
       const action = fromActions.addAttachmentAction({ attachment });
       const outcome = fromActions.addAttachmentCompleteAction({ attachment });
 
       actions = hot("-a", { a: action });
       const response = cold("-a|", { a: attachment });
-      sampleApi.createAttachments.and.returnValue(response);
+      sampleApi.samplesControllerCreateAttachmentsV3.and.returnValue(response);
 
       const expected = cold("--b", { b: outcome });
       expect(effects.addAttachment$).toBeObservable(expected);
@@ -433,51 +395,10 @@ describe("SampleEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-#", {});
-      sampleApi.createAttachments.and.returnValue(response);
+      sampleApi.samplesControllerCreateAttachmentsV3.and.returnValue(response);
 
       const expected = cold("--b", { b: outcome });
       expect(effects.addAttachment$).toBeObservable(expected);
-    });
-  });
-
-  describe("updateAttachmentCaption$", () => {
-    const attachment = new Attachment();
-    const sampleId = "testId";
-    const attachmentId = "testId";
-    const caption = "test";
-
-    it("should result in a updateAttachmentCaptionCompleteAction", () => {
-      const action = fromActions.updateAttachmentCaptionAction({
-        sampleId,
-        attachmentId,
-        caption,
-      });
-      const outcome = fromActions.updateAttachmentCaptionCompleteAction({
-        attachment,
-      });
-
-      actions = hot("-a", { a: action });
-      const response = cold("-a|", { a: attachment });
-      sampleApi.updateByIdAttachments.and.returnValue(response);
-
-      const expected = cold("--b", { b: outcome });
-      expect(effects.updateAttachmentCaption$).toBeObservable(expected);
-    });
-
-    it("should result in a updateAttachmentCaptionFailedAction", () => {
-      const action = fromActions.updateAttachmentCaptionAction({
-        sampleId,
-        attachmentId,
-        caption,
-      });
-      const outcome = fromActions.updateAttachmentCaptionFailedAction();
-
-      actions = hot("-a", { a: action });
-      const response = cold("-#", {});
-      sampleApi.updateByIdAttachments.and.returnValue(response);
-
-      const expected = cold("--b", { b: outcome });
-      expect(effects.updateAttachmentCaption$).toBeObservable(expected);
     });
   });
 
@@ -496,7 +417,9 @@ describe("SampleEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-a|", { a: attachmentId });
-      sampleApi.destroyByIdAttachments.and.returnValue(response);
+      sampleApi.samplesControllerFindOneAttachmentAndRemoveV3.and.returnValue(
+        response,
+      );
 
       const expected = cold("--b", { b: outcome });
       expect(effects.removeAttachment$).toBeObservable(expected);
@@ -511,7 +434,9 @@ describe("SampleEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-#", {});
-      sampleApi.destroyByIdAttachments.and.returnValue(response);
+      sampleApi.samplesControllerFindOneAttachmentAndRemoveV3.and.returnValue(
+        response,
+      );
 
       const expected = cold("--b", { b: outcome });
       expect(effects.removeAttachment$).toBeObservable(expected);
@@ -613,7 +538,6 @@ describe("SampleEffects", () => {
 
     describe("ofType addAttachmentAction", () => {
       it("should dispatch a loadingAction", () => {
-        const attachment = new Attachment();
         const action = fromActions.addAttachmentAction({ attachment });
         const outcome = loadingAction();
 
@@ -738,7 +662,7 @@ describe("SampleEffects", () => {
 
     describe("ofType fetchSampleDatasetsCompleteAction", () => {
       it("should dispatch a loadingCompleteAction", () => {
-        const datasets = [new Dataset()];
+        const datasets = [dataset];
         const action = fromActions.fetchSampleDatasetsCompleteAction({
           datasets,
         });
@@ -842,7 +766,6 @@ describe("SampleEffects", () => {
 
     describe("ofType addAttachmentCompleteAction", () => {
       it("should dispatch a loadingCompleteAction", () => {
-        const attachment = new Attachment();
         const action = fromActions.addAttachmentCompleteAction({ attachment });
         const outcome = loadingCompleteAction();
 
@@ -867,7 +790,6 @@ describe("SampleEffects", () => {
 
     describe("ofType updateAttachmentCaptionCompleteAction", () => {
       it("should dispatch a loadingCompleteAction", () => {
-        const attachment = new Attachment();
         const action = fromActions.updateAttachmentCaptionCompleteAction({
           attachment,
         });

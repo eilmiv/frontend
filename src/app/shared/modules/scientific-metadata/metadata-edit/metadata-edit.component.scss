@@ -1,13 +1,20 @@
 .container {
   margin: 1em;
 
-  button {
-    margin: 1em 1em 0 0;
-  }
-
   mat-icon {
     vertical-align: middle;
   }
+}
+
+.unit-warning {
+  cursor: pointer;
+  margin-bottom: -0.5em;
+  color: rgba(105, 85, 6, 0.8);
+}
+
+::ng-deep mat-hint {
+  white-space: nowrap;
+  color: rgb(179, 0, 0);
 }
 
 @media only screen and (min-width: 1280px) {
@@ -15,12 +22,32 @@
     .formRow {
       .formColumn {
         padding-right: 1em;
+        min-width: 20%;
+
+        &.typeColumn {
+          min-width: 15%;
+        }
+
+        &.deleteColumn {
+          min-width: auto;
+        }
 
         .selectField {
           max-width: 8em;
         }
       }
     }
+  }
+}
+@media only screen and (max-width: 400px) {
+  .save-button {
+    margin-top: 1em;
+  }
+}
+
+@media only screen and (min-width: 400px) {
+  .save-button {
+    margin-left: 1em;
   }
 }
 

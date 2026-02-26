@@ -6,6 +6,9 @@ import { MatIconModule } from "@angular/material/icon";
 import { MatButtonModule } from "@angular/material/button";
 import { NgxJsonViewerModule } from "ngx-json-viewer";
 import { AppConfigService } from "app-config.service";
+import { StoreModule } from "@ngrx/store";
+import { TranslateService } from "@ngx-translate/core";
+import { SharedScicatFrontendModule } from "shared/shared.module";
 
 const getConfig = () => ({
   jsonMetadataEnabled: true,
@@ -15,26 +18,34 @@ describe("ProposalsDetailComponent", () => {
   let component: ProposalDetailComponent;
   let fixture: ComponentFixture<ProposalDetailComponent>;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        schemas: [NO_ERRORS_SCHEMA],
-        imports: [
-          MatButtonModule,
-          MatCardModule,
-          MatIconModule,
-          NgxJsonViewerModule,
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      schemas: [NO_ERRORS_SCHEMA],
+      imports: [
+        MatButtonModule,
+        MatCardModule,
+        MatIconModule,
+        NgxJsonViewerModule,
+        SharedScicatFrontendModule,
+        StoreModule.forRoot({}),
+      ],
+      providers: [
+        { provide: TranslateService, useValue: { instant: (k: string) => k } },
+      ],
+      declarations: [ProposalDetailComponent],
+    });
+    TestBed.overrideComponent(ProposalDetailComponent, {
+      set: {
+        providers: [
+          {
+            provide: AppConfigService,
+            useValue: { getConfig },
+          },
         ],
-        declarations: [ProposalDetailComponent],
-      });
-      TestBed.overrideComponent(ProposalDetailComponent, {
-        set: {
-          providers: [{ provide: AppConfigService, useValue: { getConfig } }],
-        },
-      });
-      TestBed.compileComponents();
-    })
-  );
+      },
+    });
+    TestBed.compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(ProposalDetailComponent);

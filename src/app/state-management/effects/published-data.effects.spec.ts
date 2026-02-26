@@ -1,15 +1,10 @@
-import { Observable } from "rxjs";
 import { PublishedDataEffects } from "./published-data.effects";
-import {
-  PublishedDataApi,
-  PublishedDataInterface,
-  PublishedData,
-} from "shared/sdk";
 import { TestBed } from "@angular/core/testing";
 import { provideMockActions } from "@ngrx/effects/testing";
 import { provideMockStore } from "@ngrx/store/testing";
 import { selectQueryParams } from "state-management/selectors/published-data.selectors";
 import * as fromActions from "state-management/actions/published-data.actions";
+import { clearBatchAction } from "state-management/actions/datasets.actions";
 import { hot, cold } from "jasmine-marbles";
 import { MessageType } from "state-management/models";
 import {
@@ -19,26 +14,38 @@ import {
 } from "state-management/actions/user.actions";
 import { Type } from "@angular/core";
 import { Router } from "@angular/router";
-import { MockRouter } from "shared/MockStubs";
+import { MockRouter, createMock } from "shared/MockStubs";
+import {
+  DatasetsV4Service,
+  PublishedData,
+  PublishedDataV4Service,
+} from "@scicatproject/scicat-sdk-ts-angular";
+import { TestObservable } from "jasmine-marbles/src/test-observables";
 
-const data: PublishedDataInterface = {
+const publishedData = createMock<PublishedData>({
   doi: "testDOI",
-  affiliation: "test affiliation",
-  creator: ["test creator"],
-  publisher: "test publisher",
-  publicationYear: 2019,
   title: "test title",
   abstract: "test abstract",
-  dataDescription: "test description",
-  resourceType: "test type",
-  pidArray: ["testPid"],
-};
-const publishedData = new PublishedData(data);
+  datasetPids: ["testPid"],
+  createdAt: "",
+  registeredTime: "",
+  updatedAt: "",
+  numberOfFiles: 1,
+  sizeOfArchive: 1,
+  metadata: {
+    creators: ["test creator"],
+    affiliation: "test affiliation",
+    publisher: { name: "test publisher" },
+    resourceType: "test type",
+    url: "",
+  },
+  status: PublishedData.StatusEnum.private,
+});
 
 describe("PublishedDataEffects", () => {
-  let actions: Observable<any>;
+  let actions: TestObservable;
   let effects: PublishedDataEffects;
-  let publishedDataApi: jasmine.SpyObj<PublishedDataApi>;
+  let publishedDataApi: jasmine.SpyObj<PublishedDataV4Service>;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
@@ -49,13 +56,19 @@ describe("PublishedDataEffects", () => {
           selectors: [{ selector: selectQueryParams, value: {} }],
         }),
         {
-          provide: PublishedDataApi,
+          provide: PublishedDataV4Service,
           useValue: jasmine.createSpyObj("publsihedDataApi", [
-            "find",
-            "count",
-            "findById",
-            "create",
-            "register",
+            "publishedDataV4ControllerFindAllV4",
+            "publishedDataV4ControllerCountV4",
+            "publishedDataV4ControllerFindOneV4",
+            "publishedDataV4ControllerCreateV4",
+            "publishedDataV4ControllerRegisterV4",
+          ]),
+        },
+        {
+          provide: DatasetsV4Service,
+          useValue: jasmine.createSpyObj("datasetsV4Service", [
+            "datasetsV4ControllerFindAllV4",
           ]),
         },
         { provide: Router, useClass: MockRouter },
@@ -63,7 +76,7 @@ describe("PublishedDataEffects", () => {
     });
 
     effects = TestBed.inject(PublishedDataEffects);
-    publishedDataApi = injectedStub(PublishedDataApi);
+    publishedDataApi = injectedStub(PublishedDataV4Service);
   });
 
   const injectedStub = <S>(service: Type<S>): jasmine.SpyObj<S> =>
@@ -81,7 +94,9 @@ describe("PublishedDataEffects", () => {
 
         actions = hot("-a", { a: action });
         const response = cold("-a|", { a: allPublishedData });
-        publishedDataApi.find.and.returnValue(response);
+        publishedDataApi.publishedDataV4ControllerFindAllV4.and.returnValue(
+          response,
+        );
 
         const expected = cold("--(bc)", { b: outcome1, c: outcome2 });
         expect(effects.fetchAllPublishedData$).toBeObservable(expected);
@@ -93,7 +108,9 @@ describe("PublishedDataEffects", () => {
 
         actions = hot("-a", { a: action });
         const response = cold("-#", {});
-        publishedDataApi.find.and.returnValue(response);
+        publishedDataApi.publishedDataV4ControllerFindAllV4.and.returnValue(
+          response,
+        );
 
         const expected = cold("--b", { b: outcome });
         expect(effects.fetchAllPublishedData$).toBeObservable(expected);
@@ -114,7 +131,9 @@ describe("PublishedDataEffects", () => {
 
         actions = hot("-a", { a: action });
         const response = cold("-a|", { a: allPublishedData });
-        publishedDataApi.find.and.returnValue(response);
+        publishedDataApi.publishedDataV4ControllerFindAllV4.and.returnValue(
+          response,
+        );
 
         const expected = cold("--(bc)", { b: outcome1, c: outcome2 });
         expect(effects.fetchAllPublishedData$).toBeObservable(expected);
@@ -126,7 +145,9 @@ describe("PublishedDataEffects", () => {
 
         actions = hot("-a", { a: action });
         const response = cold("-#", {});
-        publishedDataApi.find.and.returnValue(response);
+        publishedDataApi.publishedDataV4ControllerFindAllV4.and.returnValue(
+          response,
+        );
 
         const expected = cold("--b", { b: outcome });
         expect(effects.fetchAllPublishedData$).toBeObservable(expected);
@@ -142,7 +163,9 @@ describe("PublishedDataEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-a|", { a: { count } });
-      publishedDataApi.count.and.returnValue(response);
+      publishedDataApi.publishedDataV4ControllerCountV4.and.returnValue(
+        response,
+      );
 
       const expected = cold("--b", { b: outcome });
       expect(effects.fetchCount$).toBeObservable(expected);
@@ -154,7 +177,9 @@ describe("PublishedDataEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-#", {});
-      publishedDataApi.count.and.returnValue(response);
+      publishedDataApi.publishedDataV4ControllerCountV4.and.returnValue(
+        response,
+      );
 
       const expected = cold("--b", { b: outcome });
       expect(effects.fetchCount$).toBeObservable(expected);
@@ -171,7 +196,9 @@ describe("PublishedDataEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-a|", { a: publishedData });
-      publishedDataApi.findById.and.returnValue(response);
+      publishedDataApi.publishedDataV4ControllerFindOneV4.and.returnValue(
+        response,
+      );
 
       const expected = cold("--b", { b: outcome });
       expect(effects.fetchPublishedData$).toBeObservable(expected);
@@ -184,7 +211,9 @@ describe("PublishedDataEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-#", {});
-      publishedDataApi.findById.and.returnValue(response);
+      publishedDataApi.publishedDataV4ControllerFindOneV4.and.returnValue(
+        response,
+      );
 
       const expected = cold("--b", { b: outcome });
       expect(effects.fetchPublishedData$).toBeObservable(expected);
@@ -194,33 +223,45 @@ describe("PublishedDataEffects", () => {
   describe("publishDataset$", () => {
     it("should result in a publishDatasetCompleteAction, a fetchPublishedDataAction", () => {
       const id = "testDOI";
-      const action = fromActions.publishDatasetAction({ data: publishedData });
-      const outcome1 = fromActions.publishDatasetCompleteAction({
+      const action = fromActions.createPublishedDataAction({
+        data: publishedData,
+      });
+      const outcome1 = fromActions.createPublishedDataCompleteAction({
         publishedData,
       });
       const outcome2 = fromActions.fetchPublishedDataAction({ id });
+      const outcome3 = clearBatchAction();
+      const outcome4 = fromActions.clearPublishedDataFromLocalStorage();
 
       actions = hot("-a", { a: action });
       const response = cold("-a|", { a: publishedData });
-      publishedDataApi.create.and.returnValue(response);
+      publishedDataApi.publishedDataV4ControllerCreateV4.and.returnValue(
+        response,
+      );
 
-      const expected = cold("--(bc)", {
+      const expected = cold("--(bcde)", {
         b: outcome1,
         c: outcome2,
+        d: outcome3,
+        e: outcome4,
       });
-      expect(effects.publishDataset$).toBeObservable(expected);
+      expect(effects.createPublishedData$).toBeObservable(expected);
     });
 
     it("should result in a publishDatasetFailedAction", () => {
-      const action = fromActions.publishDatasetAction({ data: publishedData });
-      const outcome = fromActions.publishDatasetFailedAction();
+      const action = fromActions.createPublishedDataAction({
+        data: publishedData,
+      });
+      const outcome = fromActions.createPublishedDataFailedAction();
 
       actions = hot("-a", { a: action });
       const response = cold("-#", {});
-      publishedDataApi.create.and.returnValue(response);
+      publishedDataApi.publishedDataV4ControllerCreateV4.and.returnValue(
+        response,
+      );
 
       const expected = cold("--b", { b: outcome });
-      expect(effects.publishDataset$).toBeObservable(expected);
+      expect(effects.createPublishedData$).toBeObservable(expected);
     });
   });
 
@@ -231,7 +272,7 @@ describe("PublishedDataEffects", () => {
         content: "Publication Successful",
         duration: 5000,
       };
-      const action = fromActions.publishDatasetCompleteAction({
+      const action = fromActions.createPublishedDataCompleteAction({
         publishedData,
       });
       const outcome = showMessageAction({ message });
@@ -239,7 +280,9 @@ describe("PublishedDataEffects", () => {
       actions = hot("-a", { a: action });
 
       const expected = cold("-b", { b: outcome });
-      expect(effects.publishDatasetCompleteMessage$).toBeObservable(expected);
+      expect(effects.createPublishedDataCompleteMessage$).toBeObservable(
+        expected,
+      );
     });
   });
 
@@ -250,13 +293,15 @@ describe("PublishedDataEffects", () => {
         content: "Publication Failed",
         duration: 5000,
       };
-      const action = fromActions.publishDatasetFailedAction();
+      const action = fromActions.createPublishedDataFailedAction();
       const outcome = showMessageAction({ message });
 
       actions = hot("-a", { a: action });
 
       const expected = cold("-b", { b: outcome });
-      expect(effects.publishDatasetFailedMessage$).toBeObservable(expected);
+      expect(effects.createPublishedDataFailedMessage$).toBeObservable(
+        expected,
+      );
     });
   });
 
@@ -271,23 +316,32 @@ describe("PublishedDataEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-a|", { a: publishedData });
-      publishedDataApi.register.and.returnValue(response);
+      publishedDataApi.publishedDataV4ControllerRegisterV4.and.returnValue(
+        response,
+      );
 
       const expected = cold("--(bc)", { b: outcome, c: outcome1 });
       expect(effects.registerPublishedData$).toBeObservable(expected);
     });
 
     it("should result in a registerPublishedDataFailedAction", () => {
-      const doi = "testDOI";
-      const action = fromActions.registerPublishedDataAction({ doi });
-      const outcome = fromActions.registerPublishedDataFailedAction();
+      const error = new Error("Test");
+      const message = {
+        type: MessageType.Error,
+        content: "Registration Failed. " + error.message,
+        duration: 5000,
+      };
+      const action = fromActions.registerPublishedDataFailedAction({
+        error: [error.message],
+      });
+      const outcome = showMessageAction({ message });
 
       actions = hot("-a", { a: action });
-      const response = cold("-#", {});
-      publishedDataApi.register.and.returnValue(response);
 
-      const expected = cold("--b", { b: outcome });
-      expect(effects.registerPublishedData$).toBeObservable(expected);
+      const expected = cold("-b", { b: outcome });
+      expect(effects.registerPublishedDataFailedMessage$).toBeObservable(
+        expected,
+      );
     });
   });
 
@@ -331,8 +385,7 @@ describe("PublishedDataEffects", () => {
 
     describe("ofType publishedDatasetAction", () => {
       it("should dispatch a loadingAction", () => {
-        const id = "testId";
-        const action = fromActions.publishDatasetAction({
+        const action = fromActions.createPublishedDataAction({
           data: publishedData,
         });
         const outcome = loadingAction();
@@ -413,7 +466,7 @@ describe("PublishedDataEffects", () => {
 
     describe("ofType publishDatasetCompleteAction", () => {
       it("should dispatch a loadingCompleteAction", () => {
-        const action = fromActions.publishDatasetCompleteAction({
+        const action = fromActions.createPublishedDataCompleteAction({
           publishedData,
         });
         const outcome = loadingCompleteAction();
@@ -427,7 +480,7 @@ describe("PublishedDataEffects", () => {
 
     describe("ofType publishDatasetFailedAction", () => {
       it("should dispatch a loadingCompleteAction", () => {
-        const action = fromActions.publishDatasetFailedAction();
+        const action = fromActions.createPublishedDataFailedAction();
         const outcome = loadingCompleteAction();
 
         actions = hot("-a", { a: action });
@@ -453,7 +506,9 @@ describe("PublishedDataEffects", () => {
 
     describe("ofType registerPublishedDataFailedAction", () => {
       it("should dispatch a loadingCompleteAction", () => {
-        const action = fromActions.registerPublishedDataFailedAction();
+        const action = fromActions.registerPublishedDataFailedAction({
+          error: [],
+        });
         const outcome = loadingCompleteAction();
 
         actions = hot("-a", { a: action });

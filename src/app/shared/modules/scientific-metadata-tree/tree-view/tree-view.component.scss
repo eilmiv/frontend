@@ -10,7 +10,7 @@
   }
 }
 @media only screen and (min-width: 1280px) {
-  .search-field{
+  .search-field {
     width: 40%;
   }
   .container {
@@ -27,7 +27,7 @@
 }
 
 @media only screen and (max-width: 1279px) {
-  .search-field{
+  .search-field {
     width: 50%;
   }
   .container {
@@ -50,7 +50,7 @@ mat-form-field {
   width: 40%;
   // padding-left: 40px;
 }
-.tool-bar{
+.tool-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -60,15 +60,19 @@ mat-form-field {
   padding-left: 0px;
 }
 section {
-  display: table;
+  display: grid;
+  grid-template-columns: 40% 60%;
+  gap: 1em;
   width: 100%;
+  margin: 0 2em;
 }
-.key-cell{
-  display: table-cell;
-  margin-left: 8px;
-  width:40% ;
+
+.key-cell {
+  grid-column: 1;
+  word-wrap: break-word;
 }
+
 .value-cell {
-  display: table-cell;
-  width: 60%;
+  grid-column: 2;
+  word-wrap: break-word;
 }

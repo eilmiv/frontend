@@ -1,8 +1,19 @@
+@use "@angular/material" as mat;
 mat-card {
-  margin-top: 0.5rem;
-
-  .mat-form-field {
+  box-shadow: var(--theme-side-panel-shadow);
+  border: var(--theme-side-panel-border, 1px solid rgba(153, 213, 233, 0.7));
+  border-radius: 4px;
+  .mat-mdc-form-field {
     width: 100%;
+  }
+
+  .filter-container {
+    display: flex;
+    align-items: center;
+
+    :first-child {
+      flex-grow: 1;
+    }
   }
 
   .section-container {
@@ -17,18 +28,78 @@ mat-card {
     }
 
     .clear-button {
-      float: right;
-      transform: translateY(-25%);
+      margin-left: auto;
+    }
+
+    .full-width-button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 0;
+
+      mat-icon {
+        margin-right: 8px;
+      }
     }
 
     .scientific-chips {
-      ::ng-deep .mat-chip-list-wrapper {
+      ::ng-deep .mat-mdc-chip-list-wrapper {
         margin: 0;
       }
     }
+
+    .scientific-chip {
+      height: auto;
+    }
+
+    .scientific-chip-text {
+      white-space: normal;
+      word-break: break-all;
+    }
+
+    .datasets-filters-search-button {
+      width: 49%;
+      margin-left: 2%;
+    }
+
+    .datasets-filters-clear-all-button {
+      width: 49%;
+    }
   }
 
-  .section-container:first-child {
+  .filters-header {
+    padding-top: 0.1rem;
     margin-top: unset;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    .settings-button {
+      display: flex;
+      align-items: center;
+      justify-content: end;
+    }
+  }
+}
+
+.public-toggle {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  button {
+    border-radius: 18px;
+    padding: 4px 16px;
+    font-size: 0.85rem;
+    border: 1.5px solid #ccc;
+    background-color: white;
+    color: rgba(0, 0, 0, 0.87);
+
+    &.active {
+      background-color: #e3f2fd;
+      border-color: #1976d2;
+    }
   }
 }

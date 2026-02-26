@@ -2,7 +2,7 @@ import { UserEffects } from "./../state-management/effects/user.effects";
 import { EffectsModule } from "@ngrx/effects";
 import { ADAuthService } from "./adauth.service";
 import { CommonModule } from "@angular/common";
-import { FlexLayoutModule } from "@angular/flex-layout";
+import { FlexLayoutModule } from "@ngbracket/ngx-layout";
 import { FormsModule, ReactiveFormsModule } from "@angular/forms";
 import { LoginComponent } from "users/login/login.component";
 import { NgModule } from "@angular/core";
@@ -21,6 +21,8 @@ import { MatInputModule } from "@angular/material/input";
 import { PrivacyDialogComponent } from "./privacy-dialog/privacy-dialog.component";
 import { MatTooltipModule } from "@angular/material/tooltip";
 import { AuthCallbackComponent } from "./auth-callback/auth-callback.component";
+import { MatTabsModule } from "@angular/material/tabs";
+import { NgxJsonViewerModule } from "ngx-json-viewer";
 
 @NgModule({
   imports: [
@@ -36,7 +38,9 @@ import { AuthCallbackComponent } from "./auth-callback/auth-callback.component";
     MatGridListModule,
     MatIconModule,
     MatInputModule,
+    MatTabsModule,
     MatTooltipModule,
+    NgxJsonViewerModule,
     ReactiveFormsModule,
     SharedScicatFrontendModule,
     StoreModule.forFeature("users", userReducer),

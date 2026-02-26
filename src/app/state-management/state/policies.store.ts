@@ -1,4 +1,5 @@
-import { GenericFilters, Policy } from "state-management/models";
+import { Policy } from "@scicatproject/scicat-sdk-ts-angular";
+import { GenericFilters } from "state-management/models";
 
 export interface PolicyState {
   policies: Policy[];
@@ -23,12 +24,12 @@ export const initialPolicyState: PolicyState = {
   policiesFilters: {
     skip: 0,
     limit: 25,
-    sortField: "ownerGroup:desc"
+    sortField: "ownerGroup:desc",
   },
 
   editableFilters: {
     skip: 0,
     limit: 25,
-    sortField: "ownerGroup:desc"
-  }
+    sortField: "ownerGroup:desc",
+  },
 };

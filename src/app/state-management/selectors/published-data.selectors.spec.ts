@@ -1,21 +1,28 @@
-import { PublishedDataInterface, PublishedData } from "shared/sdk";
 import { GenericFilters } from "state-management/models";
 import { PublishedDataState } from "state-management/state/published-data.store";
 import * as fromSelectors from "./published-data.selectors";
+import { createMock } from "shared/MockStubs";
+import { PublishedData } from "@scicatproject/scicat-sdk-ts-angular";
 
-const data: PublishedDataInterface = {
+const publishedData = createMock<PublishedData>({
   doi: "testDOI",
-  affiliation: "test affiliation",
-  creator: ["test creator"],
-  publisher: "test publisher",
-  publicationYear: 2019,
   title: "test title",
   abstract: "test abstract",
-  dataDescription: "test description",
-  resourceType: "test type",
-  pidArray: ["testPid"],
-};
-const publishedData = new PublishedData(data);
+  datasetPids: ["testPid"],
+  createdAt: "",
+  registeredTime: "",
+  updatedAt: "",
+  numberOfFiles: 1,
+  sizeOfArchive: 1,
+  metadata: {
+    creators: ["test creator"],
+    affiliation: "test affiliation",
+    publisher: { name: "test publisher" },
+    resourceType: "test type",
+    url: "",
+  },
+  status: PublishedData.StatusEnum.private,
+});
 
 const filters: GenericFilters = {
   sortField: "publicationYear desc",
@@ -37,8 +44,8 @@ describe("Published Data Selectors", () => {
     it("should select publishedData", () => {
       expect(
         fromSelectors.selectAllPublishedData.projector(
-          initialPublishedDataState
-        )
+          initialPublishedDataState,
+        ),
       ).toEqual([]);
     });
   });
@@ -47,8 +54,8 @@ describe("Published Data Selectors", () => {
     it("should select currentPublishedData", () => {
       expect(
         fromSelectors.selectCurrentPublishedData.projector(
-          initialPublishedDataState
-        )
+          initialPublishedDataState,
+        ),
       ).toEqual(publishedData);
     });
   });
@@ -57,8 +64,8 @@ describe("Published Data Selectors", () => {
     it("should select totalCount", () => {
       expect(
         fromSelectors.selectPublishedDataCount.projector(
-          initialPublishedDataState
-        )
+          initialPublishedDataState,
+        ),
       ).toEqual(0);
     });
   });
@@ -66,7 +73,7 @@ describe("Published Data Selectors", () => {
   describe("selectFilters", () => {
     it("should select filters", () => {
       expect(
-        fromSelectors.selectFilters.projector(initialPublishedDataState)
+        fromSelectors.selectFilters.projector(initialPublishedDataState),
       ).toEqual(filters);
     });
   });
@@ -76,7 +83,7 @@ describe("Published Data Selectors", () => {
       const { skip, limit } = filters;
       const page = skip / limit;
       expect(
-        fromSelectors.selectPage.projector(initialPublishedDataState.filters)
+        fromSelectors.selectPage.projector(initialPublishedDataState.filters),
       ).toEqual(page);
     });
   });
@@ -86,8 +93,8 @@ describe("Published Data Selectors", () => {
       const { limit } = filters;
       expect(
         fromSelectors.selectPublishedDataPerPage.projector(
-          initialPublishedDataState.filters
-        )
+          initialPublishedDataState.filters,
+        ),
       ).toEqual(limit);
     });
   });
@@ -100,8 +107,8 @@ describe("Published Data Selectors", () => {
           initialPublishedDataState.totalCount,
           fromSelectors.selectPage.projector(initialPublishedDataState.filters),
           initialPublishedDataState.filters.limit,
-          initialPublishedDataState.filters
-        )
+          initialPublishedDataState.filters,
+        ),
       ).toEqual({
         publishedData: [],
         count: 0,
@@ -122,8 +129,8 @@ describe("Published Data Selectors", () => {
       const params = { order: sortField, skip, limit };
       expect(
         fromSelectors.selectQueryParams.projector(
-          initialPublishedDataState.filters
-        )
+          initialPublishedDataState.filters,
+        ),
       ).toEqual(params);
     });
   });

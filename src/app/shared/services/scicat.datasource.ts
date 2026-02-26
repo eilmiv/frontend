@@ -3,9 +3,8 @@ import { Observable, BehaviorSubject, of, Subscription } from "rxjs";
 import { ScicatDataService } from "./scicat-data-service";
 import { catchError, finalize } from "rxjs/operators";
 import { ExportExcelService } from "./export-excel.service";
-import { LoopBackConfig } from "shared/sdk";
 import { Column } from "shared/modules/shared-table/shared-table.module";
-import { AppConfig, AppConfigService } from "app-config.service";
+import { AppConfigInterface, AppConfigService } from "app-config.service";
 
 // For each different table type one instance of this class should be created
 
@@ -13,7 +12,7 @@ const resolvePath = (object: any, path: string, defaultValue: unknown) =>
   path.split(".").reduce((o, p) => (o ? o[p] : defaultValue), object);
 
 export class SciCatDataSource implements DataSource<any> {
-  private appConfig: AppConfig;
+  private appConfig: AppConfigInterface;
   private exportSubscription: Subscription;
   private dataForExcel: unknown[] = [];
   private columnsdef: Column[] = [];
@@ -30,15 +29,11 @@ export class SciCatDataSource implements DataSource<any> {
     private appConfigService: AppConfigService,
     private scicatdataService: ScicatDataService,
     private ete: ExportExcelService,
-    private tableDefinition: any
+    private tableDefinition: any,
   ) {
     this.appConfig = this.appConfigService.getConfig();
-    this.url =
-      this.appConfig.lbBaseURL +
-      "/" +
-      LoopBackConfig.getApiVersion() +
-      "/" +
-      this.tableDefinition.collection;
+    // TODO: Check if we can get the api version somehow or add it in the configuration instеad.
+    this.url = `${this.appConfig.lbBaseURL}/api/${this.tableDefinition.apiVersion || "v3"}/${this.tableDefinition.collection}`;
     this.collection = this.tableDefinition.collection;
     this.columnsdef = this.tableDefinition.columns;
 
@@ -46,9 +41,9 @@ export class SciCatDataSource implements DataSource<any> {
       // convert array of objects into array of arrays
       this.dataForExcel = [];
       if (data.length > 0) {
-        data.forEach((row: any) => {
+        data.forEach((row) => {
           const rowSorted = this.columnsdef.map((col) =>
-            resolvePath(row, col.id, null)
+            resolvePath(row, col.id, null),
           );
           this.dataForExcel.push(Object.values(rowSorted));
         });
@@ -69,17 +64,25 @@ export class SciCatDataSource implements DataSource<any> {
     sortField?: string,
     sortDirection = "asc",
     pageIndex = 0,
-    pageSize = 10
+    pageSize = 10,
+    isFilesDashboard?: boolean,
   ) {
     this.loadingSubject.next(true);
 
     this.scicatdataService
-      .getCount(this.url, this.columnsdef, filterExpressions)
-      .subscribe((numData) =>
-        numData[0] && numData[0].all[0]
+      .getCount(this.url, this.columnsdef, filterExpressions, isFilesDashboard)
+      .subscribe((numData) => {
+        // NOTE: For published data endpoint we don't have fullquery and fullfacet and that's why it is a bit special case.
+        if (this.url.includes("publishedData")) {
+          return numData && numData.count
+            ? this.countSubject.next(numData.count)
+            : this.countSubject.next(0);
+        }
+
+        return numData[0] && numData[0].all[0]
           ? this.countSubject.next(numData[0].all[0].totalSets)
-          : this.countSubject.next(0)
-      );
+          : this.countSubject.next(0);
+      });
 
     this.scicatdataService
       .findAllData(
@@ -89,11 +92,12 @@ export class SciCatDataSource implements DataSource<any> {
         sortField,
         sortDirection,
         pageIndex,
-        pageSize
+        pageSize,
+        isFilesDashboard,
       )
       .pipe(
         catchError(() => of([])),
-        finalize(() => this.loadingSubject.next(false))
+        finalize(() => this.loadingSubject.next(false)),
       )
       .subscribe((data) => {
         // extend with unique field per row
@@ -109,7 +113,7 @@ export class SciCatDataSource implements DataSource<any> {
   loadExportData(
     filterExpressions?: any,
     sortField?: string,
-    sortDirection = "asc"
+    sortDirection = "asc",
   ) {
     this.loadingSubject.next(true);
     this.scicatdataService
@@ -126,11 +130,11 @@ export class SciCatDataSource implements DataSource<any> {
             sortField,
             sortDirection,
             0,
-            count
+            count,
           )
           .pipe(
             catchError(() => of([])),
-            finalize(() => this.loadingSubject.next(false))
+            finalize(() => this.loadingSubject.next(false)),
           )
           .subscribe((data) => {
             this.dataExportSubject.next(data);
@@ -138,7 +142,7 @@ export class SciCatDataSource implements DataSource<any> {
       });
   }
 
-  connect(collectionViewer: CollectionViewer): Observable<any[]> {
+  connect(): Observable<any[]> {
     return this.dataSubject.asObservable();
   }
 

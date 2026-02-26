@@ -6,17 +6,24 @@ import {
   AfterViewChecked,
 } from "@angular/core";
 import { Store } from "@ngrx/store";
-import { Dataset, UserApi } from "shared/sdk";
-import { selectCurrentDataset } from "state-management/selectors/datasets.selectors";
+import {
+  OutputDatasetObsoleteDto,
+  UsersService,
+} from "@scicatproject/scicat-sdk-ts-angular";
+import {
+  selectCurrentDataset,
+  selectIsCurrentDatasetInBatch,
+} from "state-management/selectors/datasets.selectors";
 import {
   selectIsAdmin,
   selectIsLoading,
   selectIsLoggedIn,
   selectProfile,
 } from "state-management/selectors/user.selectors";
-import { ActivatedRoute } from "@angular/router";
-import { Subscription, Observable, combineLatest } from "rxjs";
-import { map, pluck } from "rxjs/operators";
+import { ActivatedRoute, IsActiveMatchOptions } from "@angular/router";
+import { Subscription, Observable, combineLatest, Subject } from "rxjs";
+import { map, takeUntil } from "rxjs/operators";
+import * as fromDatasetActions from "state-management/actions/datasets.actions";
 import {
   clearCurrentDatasetStateAction,
   fetchAttachmentsAction,
@@ -51,6 +58,7 @@ export interface FileObject {
 }
 enum TAB {
   details = "Details",
+  jsonScientificMetadata = "Scientific Metadata (JSON)",
   datafiles = "Datafiles",
   relatedDatasets = "Related Datasets",
   reduce = "Reduce",
@@ -63,26 +71,36 @@ enum TAB {
   selector: "dataset-details-dashboard",
   templateUrl: "./dataset-details-dashboard.component.html",
   styleUrls: ["./dataset-details-dashboard.component.scss"],
+  standalone: false,
 })
 export class DatasetDetailsDashboardComponent
-  implements OnInit, OnDestroy, AfterViewChecked {
+  implements OnInit, OnDestroy, AfterViewChecked
+{
   private subscriptions: Subscription[] = [];
   loading$ = this.store.select(selectIsLoading);
   loggedIn$ = this.store.select(selectIsLoggedIn);
   dataset$ = this.store.select(selectCurrentDataset);
   jwt$: Observable<JWT> = new Observable<JWT>();
-
   appConfig = this.appConfigService.getConfig();
 
-  dataset: Dataset | undefined;
+  dataset: OutputDatasetObsoleteDto | undefined;
   navLinks: {
     location: string;
     label: string;
     icon: string;
     enabled: boolean;
   }[] = [];
+
+  routerLinkActiveOptions: IsActiveMatchOptions = {
+    matrixParams: "ignored",
+    queryParams: "ignored",
+    fragment: "ignored",
+    paths: "exact",
+  };
+
   fetchDataActions: { [tab: string]: { action: any; loaded: boolean } } = {
     [TAB.details]: { action: fetchDatasetAction, loaded: false },
+    [TAB.jsonScientificMetadata]: { action: fetchDatasetAction, loaded: false },
     [TAB.relatedDatasets]: {
       action: fetchRelatedDatasetsAction,
       loaded: false,
@@ -95,115 +113,133 @@ export class DatasetDetailsDashboardComponent
   userProfile$ = this.store.select(selectProfile);
   isAdmin$ = this.store.select(selectIsAdmin);
   accessGroups$: Observable<string[]> = this.userProfile$.pipe(
-    map((profile) => (profile ? profile.accessGroups : []))
+    map((profile) => (profile ? profile.accessGroups : [])),
   );
+  isInBatch$: Observable<boolean>;
 
   constructor(
     public appConfigService: AppConfigService,
     private cdRef: ChangeDetectorRef,
     private route: ActivatedRoute,
     private store: Store,
-    private userApi: UserApi,
-    public dialog: MatDialog
-  ) { }
+    private userService: UsersService,
+    public dialog: MatDialog,
+  ) {}
 
   ngOnInit() {
     this.subscriptions.push(
-      this.route.params.pipe(pluck("id")).subscribe((id: string) => {
-        if (id) {
-          this.resetTabs();
-          // Fetch dataset details
-          this.store.dispatch(fetchDatasetAction({ pid: id }));
-          this.fetchDataActions[TAB.details].loaded = true;
-        }
-      })
+      this.route.params
+        .pipe(map((params) => params["id"]))
+        .subscribe((id: string) => {
+          if (id) {
+            this.resetTabs();
+            // Fetch dataset details
+            this.store.dispatch(fetchDatasetAction({ pid: id }));
+            this.fetchDataActions[TAB.details].loaded = true;
+          }
+        }),
     );
 
-    const datasetSub = this.dataset$
-      .subscribe((dataset) => {
-        // Only run this code when dataset.pid is different from this.dataset.pid or this.dataset = null
-        if (dataset && (!this.dataset || this.dataset && (dataset.pid != this.dataset.pid))) {
-          this.dataset = dataset;
-          combineLatest([this.accessGroups$, this.isAdmin$, this.loggedIn$])
-            .subscribe(([groups, isAdmin, isLoggedIn]) => {
-              const isInOwnerGroup =
-                groups.indexOf(this.dataset.ownerGroup) !== -1 || isAdmin;
-              const hasAccessToLogbook = 
-                isInOwnerGroup || this.dataset.accessGroups.some(g => groups.includes(g));
-              this.navLinks = [
-                {
-                  location: "./",
-                  label: TAB.details,
-                  icon: "menu",
-                  enabled: true,
-                },
-                {
-                  location: "./datafiles",
-                  label: TAB.datafiles,
-                  icon: "cloud_download",
-                  enabled: true,
-                },
-                {
-                  location: "./related-datasets",
-                  label: TAB.relatedDatasets,
-                  icon: "folder",
-                  enabled: true,
-                },
-                {
-                  location: "./reduce",
-                  label: TAB.reduce,
-                  icon: "tune",
-                  enabled:
-                    this.appConfig.datasetReduceEnabled &&
-                    isLoggedIn &&
-                    isInOwnerGroup,
-                },
-                {
-                  location: "./logbook",
-                  label: TAB.logbook,
-                  icon: "book",
-                  enabled:
-                    this.appConfig.logbookEnabled &&
-                    isLoggedIn &&
-                    hasAccessToLogbook,
-                },
-                {
-                  location: "./attachments",
-                  label: TAB.attachments,
-                  icon: "insert_photo",
-                  enabled: isLoggedIn && isInOwnerGroup,
-                },
-                {
-                  location: "./lifecycle",
-                  label: TAB.lifecycle,
-                  icon: "loop",
-                  enabled: true,
-                },
-                {
-                  location: "./admin",
-                  label: TAB.admin,
-                  icon: "settings",
-                  enabled: isLoggedIn && isAdmin,
-                },
-              ];
-            })
-            .unsubscribe();
-          // fetch data for the selected tab
-          this.route.firstChild?.url
-            .subscribe((childUrl) => {
-              const tab = childUrl.length === 1 ? childUrl[0].path : "details";
-              this.fetchDataForTab(TAB[tab]);
-            })
-            .unsubscribe();
+    const datasetSub = this.dataset$.subscribe((dataset) => {
+      // Only run this code when dataset.pid is different from this.dataset.pid or this.dataset = null
+      if (
+        dataset &&
+        (!this.dataset || (this.dataset && dataset.pid != this.dataset.pid))
+      ) {
+        this.dataset = dataset;
+        combineLatest([
+          this.accessGroups$,
+          this.isAdmin$,
+          this.loggedIn$,
+        ]).subscribe(([groups, isAdmin, isLoggedIn]) => {
+          const isInOwnerGroup =
+            groups.indexOf(this.dataset.ownerGroup) !== -1 || isAdmin;
+          const isPublished = this.dataset.isPublished;
+          const hasAccessToLogbook =
+            isInOwnerGroup ||
+            this.dataset.accessGroups.some((g) => groups.includes(g));
+          this.navLinks = [
+            {
+              location: "./",
+              label: TAB.details,
+              icon: "menu",
+              enabled: true,
+            },
+            {
+              location: "./jsonScientificMetadata",
+              label: TAB.jsonScientificMetadata,
+              icon: "data_object",
+              enabled:
+                this.appConfig.datasetJsonScientificMetadata && isLoggedIn,
+            },
+            {
+              location: "./datafiles",
+              label: TAB.datafiles,
+              icon: "cloud_download",
+              enabled: true,
+            },
+            {
+              location: "./relatedDatasets",
+              label: TAB.relatedDatasets,
+              icon: "folder",
+              enabled: true,
+            },
+            {
+              location: "./reduce",
+              label: TAB.reduce,
+              icon: "tune",
+              enabled:
+                this.appConfig.datasetReduceEnabled &&
+                isLoggedIn &&
+                isInOwnerGroup,
+            },
+            {
+              location: "./logbook",
+              label: TAB.logbook,
+              icon: "book",
+              enabled:
+                this.appConfig.logbookEnabled &&
+                isLoggedIn &&
+                hasAccessToLogbook,
+            },
+            {
+              location: "./attachments",
+              label: TAB.attachments,
+              icon: "insert_photo",
+              enabled: isInOwnerGroup || isPublished,
+            },
+            {
+              location: "./lifecycle",
+              label: TAB.lifecycle,
+              icon: "loop",
+              enabled: true,
+            },
+            {
+              location: "./admin",
+              label: TAB.admin,
+              icon: "settings",
+              enabled: isLoggedIn && isAdmin,
+            },
+          ];
+        });
+        // fetch data for the selected tab
+        this.route.firstChild?.url
+          .subscribe((childUrl) => {
+            const tab = childUrl.length === 1 ? childUrl[0].path : "details";
+            this.fetchDataForTab(TAB[tab]);
+          })
+          .unsubscribe();
 
-          this.fetchDatasetRelatedDocuments();
-        }
-      });
+        this.fetchDatasetRelatedDocuments();
+      }
+    });
     this.subscriptions.push(datasetSub);
-    this.jwt$ = this.userApi.jwt();
+    this.jwt$ = this.userService.usersControllerGetUserJWTV3();
+
+    this.isInBatch$ = this.store.select(selectIsCurrentDatasetInBatch);
   }
   resetTabs() {
-    Object.values(this.fetchDataActions).forEach(tab => {
+    Object.values(this.fetchDataActions).forEach((tab) => {
       tab.loaded = false;
     });
   }
@@ -212,8 +248,7 @@ export class DatasetDetailsDashboardComponent
   }
   fetchDataForTab(tab: string) {
     if (tab in this.fetchDataActions) {
-      let args: { [key: string]: any };
-      args = { pid: this.dataset?.pid };
+      const args: { [key: string]: any } = { pid: this.dataset?.pid };
       // load related data for selected tab
       switch (tab) {
         case TAB.details:
@@ -222,6 +257,14 @@ export class DatasetDetailsDashboardComponent
             if (!loaded) {
               this.store.dispatch(action(args));
               this.fetchDataActions[TAB.attachments].loaded = true;
+            }
+          }
+          break;
+        case TAB.logbook:
+          {
+            const { loaded } = this.fetchDataActions[TAB.logbook];
+            if (!loaded) {
+              this.fetchDataActions[TAB.logbook].loaded = true;
             }
           }
           break;
@@ -238,24 +281,32 @@ export class DatasetDetailsDashboardComponent
 
   fetchDatasetRelatedDocuments(): void {
     if (this.dataset) {
-      if ("proposalId" in this.dataset) {
+      if ("proposalId" in this.dataset && this.dataset.proposalId) {
         this.store.dispatch(
-          fetchProposalAction({ proposalId: this.dataset["proposalId"] })
+          fetchProposalAction({
+            proposalId: this.dataset.proposalId,
+          }),
         );
       } else {
         this.store.dispatch(clearLogbookAction());
       }
-      if ("sampleId" in this.dataset) {
+      if ("sampleId" in this.dataset && this.dataset.sampleId) {
         this.store.dispatch(
-          fetchSampleAction({ sampleId: this.dataset["sampleId"] })
+          fetchSampleAction({ sampleId: this.dataset.sampleId }),
         );
       }
-      if ("instrumentId" in this.dataset) {
+      if ("instrumentId" in this.dataset && this.dataset.instrumentId) {
         this.store.dispatch(
-          fetchInstrumentAction({ pid: this.dataset["instrumentId"] })
+          fetchInstrumentAction({
+            pid: this.dataset.instrumentId,
+          }),
         );
       }
     }
+  }
+
+  onAddToBatch(): void {
+    this.store.dispatch(fromDatasetActions.addCurrentToBatchAction());
   }
 
   ngAfterViewChecked() {

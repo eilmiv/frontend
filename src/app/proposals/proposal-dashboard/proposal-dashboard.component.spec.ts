@@ -1,37 +1,96 @@
-import { ComponentFixture, TestBed } from "@angular/core/testing";
-import { Router } from "@angular/router";
-import { AppConfigService } from "app-config.service";
-import { MockRouter } from "shared/MockStubs";
-import { ExportExcelService } from "shared/services/export-excel.service";
-import { ScicatDataService } from "shared/services/scicat-data-service";
-
 import { ProposalDashboardComponent } from "./proposal-dashboard.component";
+import { ActivatedRoute } from "@angular/router";
+import { Store } from "@ngrx/store";
+import { of } from "rxjs";
 
 describe("ProposalDashboardComponent", () => {
   let component: ProposalDashboardComponent;
-  let fixture: ComponentFixture<ProposalDashboardComponent>;
-
-  const getConfig = () => ({});
-
-  beforeEach(async () => {
-    await TestBed.configureTestingModule({
-      declarations: [ProposalDashboardComponent],
-      providers: [
-        { provide: AppConfigService, useValue: { getConfig } },
-        { provide: ExportExcelService, useValue: {} },
-        { provide: Router, useClass: MockRouter },
-        { provide: ScicatDataService, useValue: {} },
-      ],
-    }).compileComponents();
-  });
+  let storeSpy: jasmine.SpyObj<Store<any>>;
+  let activatedRouteStub: Partial<ActivatedRoute>;
 
   beforeEach(() => {
-    fixture = TestBed.createComponent(ProposalDashboardComponent);
-    component = fixture.componentInstance;
-    fixture.detectChanges();
+    storeSpy = jasmine.createSpyObj("Store", ["dispatch"]);
+    activatedRouteStub = {
+      queryParams: of({
+        pageSize: "5",
+        pageIndex: "2",
+        searchQuery: '{"proposalId":"123"}',
+        sortColumn: "proposalId",
+        sortDirection: "asc",
+      }),
+    };
+
+    component = new ProposalDashboardComponent(
+      storeSpy as Store<any>,
+      activatedRouteStub as ActivatedRoute,
+    );
   });
 
   it("should create", () => {
     expect(component).toBeTruthy();
+  });
+
+  it("should dispatch fetchProposalsAction and fetchFacetCountsAction on ngOnInit", () => {
+    component.ngOnInit();
+
+    expect(storeSpy.dispatch).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        type: jasmine.stringMatching(/\[Proposal\] Fetch Proposals/),
+      }),
+    );
+
+    expect(storeSpy.dispatch).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        type: jasmine.stringMatching(/\[Proposal\] Fetch Facet Counts/),
+      }),
+    );
+  });
+
+  it("should unsubscribe from all subscriptions on ngOnDestroy", () => {
+    const sub1 = jasmine.createSpyObj("Subscription", ["unsubscribe"]);
+    const sub2 = jasmine.createSpyObj("Subscription", ["unsubscribe"]);
+    component.subscriptions = [sub1, sub2];
+
+    component.ngOnDestroy();
+
+    expect(sub1.unsubscribe).toHaveBeenCalled();
+    expect(sub2.unsubscribe).toHaveBeenCalled();
+  });
+
+  it("should use defaultPageSize if pageSize is not provided", () => {
+    activatedRouteStub.queryParams = of({
+      pageIndex: "1",
+      searchQuery: "{}",
+      sortColumn: "proposalId",
+      sortDirection: "desc",
+    });
+    component = new ProposalDashboardComponent(
+      storeSpy as Store<any>,
+      activatedRouteStub as ActivatedRoute,
+    );
+    component.ngOnInit();
+
+    expect(storeSpy.dispatch).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        limit: component.defaultPageSize,
+      }),
+    );
+  });
+
+  it("should parse searchQuery as JSON", () => {
+    activatedRouteStub.queryParams = of({
+      searchQuery: '{"email":"test@example.com"}',
+    });
+    component = new ProposalDashboardComponent(
+      storeSpy as Store<any>,
+      activatedRouteStub as ActivatedRoute,
+    );
+    component.ngOnInit();
+
+    expect(storeSpy.dispatch).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        search: { email: "test@example.com" },
+      }),
+    );
   });
 });

@@ -1,50 +1,87 @@
 import { Component, OnInit, OnDestroy, Inject } from "@angular/core";
 import { Store } from "@ngrx/store";
-import { PublishedData } from "shared/sdk";
+import { PublishedData } from "@scicatproject/scicat-sdk-ts-angular";
 import { Router } from "@angular/router";
 import { selectPublishedDataDashboardPageViewModel } from "state-management/selectors/published-data.selectors";
-import {
-  fetchAllPublishedDataAction,
-  changePageAction,
-  sortByColumnAction,
-} from "state-management/actions/published-data.actions";
-import {
-  PageChangeEvent,
-  TableColumn,
-  SortChangeEvent,
-  CheckboxEvent,
-} from "shared/modules/table/table.component";
+import { CheckboxEvent } from "shared/modules/table/table.component";
 import { Subscription } from "rxjs";
 
 import { MatCheckboxChange } from "@angular/material/checkbox";
 import { DOCUMENT } from "@angular/common";
-import { take } from "rxjs/operators";
 import { Message, MessageType } from "state-management/models";
 import { showMessageAction } from "state-management/actions/user.actions";
+import { Column } from "shared/modules/shared-table/shared-table.module";
+import { SciCatDataSource } from "shared/services/scicat.datasource";
+import { AppConfigService } from "app-config.service";
+import { ScicatDataService } from "shared/services/scicat-data-service";
+import { ExportExcelService } from "shared/services/export-excel.service";
+import { SelectionModel } from "@angular/cdk/collections";
 
 @Component({
   selector: "app-publisheddata-dashboard",
   templateUrl: "./publisheddata-dashboard.component.html",
   styleUrls: ["./publisheddata-dashboard.component.scss"],
+  standalone: false,
 })
 export class PublisheddataDashboardComponent implements OnInit, OnDestroy {
   public vm$ = this.store.select(selectPublishedDataDashboardPageViewModel);
-
-  columns: TableColumn[] = [
-    { name: "doi", icon: "fingerprint", sort: true, inList: false },
-    { name: "title", icon: "description", sort: true, inList: true },
-    { name: "creator", icon: "face", sort: true, inList: true },
-    // { name: "publicationYear", icon: "date_range", sort: true, inList: true },
-    { name: "createdBy", icon: "account_circle", sort: true, inList: true },
+  columns: Column[] = [
     {
-      name: "createdAt",
+      id: "doi",
+      label: "DOI",
+      canSort: true,
+      icon: "fingerprint",
+      matchMode: "contains",
+      hideOrder: 0,
+    },
+    {
+      id: "title",
+      label: "Title",
+      icon: "description",
+      canSort: true,
+      matchMode: "contains",
+      hideOrder: 1,
+    },
+    {
+      id: "creator",
+      label: "Creator",
+      icon: "face",
+      canSort: true,
+      matchMode: "contains",
+      hideOrder: 2,
+    },
+    {
+      id: "status",
+      label: "Status",
+      icon: "face",
+      canSort: true,
+      matchMode: "contains",
+      hideOrder: 3,
+    },
+    {
+      id: "createdBy",
+      icon: "account_circle",
+      label: "Created by",
+      canSort: true,
+      matchMode: "contains",
+      hideOrder: 4,
+    },
+    {
+      id: "createdAt",
       icon: "date_range",
-      sort: true,
-      inList: true,
-      dateFormat: "yyyy-MM-dd HH:mm",
+      label: "Created at",
+      format: "date",
+      canSort: true,
+      matchMode: "between",
+      hideOrder: 5,
     },
   ];
-  paginate = true;
+  tableDefinition = {
+    collection: "publishedData",
+    columns: this.columns,
+    apiVersion: "v4",
+  };
+  dataSource: SciCatDataSource;
   select = true;
 
   doiBaseUrl = "https://doi.org/";
@@ -54,8 +91,18 @@ export class PublisheddataDashboardComponent implements OnInit, OnDestroy {
   constructor(
     @Inject(DOCUMENT) private document: Document,
     private router: Router,
-    private store: Store
-  ) {}
+    private store: Store,
+    private appConfigService: AppConfigService,
+    private dataService: ScicatDataService,
+    private exportService: ExportExcelService,
+  ) {
+    this.dataSource = new SciCatDataSource(
+      this.appConfigService,
+      this.dataService,
+      this.exportService,
+      this.tableDefinition,
+    );
+  }
 
   onShareClick() {
     const selectionBox = this.document.createElement("textarea");
@@ -73,20 +120,9 @@ export class PublisheddataDashboardComponent implements OnInit, OnDestroy {
     const message = new Message(
       "The selected DOI's have been copied to your clipboard",
       MessageType.Success,
-      5000
+      5000,
     );
     this.store.dispatch(showMessageAction({ message }));
-  }
-
-  onPageChange(event: PageChangeEvent) {
-    this.store.dispatch(
-      changePageAction({ page: event.pageIndex, limit: event.pageSize })
-    );
-  }
-
-  onSortChange(event: SortChangeEvent) {
-    const { active: column, direction } = event;
-    this.store.dispatch(sortByColumnAction({ column, direction }));
   }
 
   onRowClick(published: PublishedData) {
@@ -94,13 +130,14 @@ export class PublisheddataDashboardComponent implements OnInit, OnDestroy {
     this.router.navigateByUrl("/publishedDatasets/" + id);
   }
 
-  onSelectAll(event: MatCheckboxChange) {
-    if (event.checked) {
-      this.vm$.pipe(take(1)).subscribe((vm) => {
-        this.selectedDOIs = vm.publishedData.map(
-          ({ doi }) => this.doiBaseUrl + encodeURIComponent(doi)
-        );
-      });
+  onSelectAll(event: {
+    event: MatCheckboxChange;
+    selection: SelectionModel<any>;
+  }) {
+    if (event.event.checked) {
+      this.selectedDOIs = event.selection.selected.map(
+        ({ doi }) => this.doiBaseUrl + encodeURIComponent(doi),
+      );
     } else {
       this.selectedDOIs = [];
     }
@@ -117,8 +154,6 @@ export class PublisheddataDashboardComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
-    this.store.dispatch(fetchAllPublishedDataAction());
-
     this.filtersSubscription = this.vm$.subscribe((vm) => {
       this.router.navigate(["/publishedDatasets"], {
         queryParams: { args: JSON.stringify(vm.filters) },

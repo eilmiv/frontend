@@ -1,8 +1,9 @@
-import { Logbook, LogbookFilters } from "state-management/models";
+import { Logbook } from "@scicatproject/scicat-sdk-ts-angular";
+import { LogbookFilters } from "state-management/models";
 
 export interface LogbookState {
   logbooks: Logbook[];
-  currentLogbook: Logbook | undefined;
+  currentLogbook: any | undefined;
 
   totalCount: number;
 
@@ -24,6 +25,6 @@ export const initialLogbookState: LogbookState = {
     showImages: true,
     sortField: "timestamp:desc",
     skip: 0,
-    limit: 25
-  }
+    limit: 25,
+  },
 };

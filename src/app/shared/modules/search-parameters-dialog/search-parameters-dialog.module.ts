@@ -10,6 +10,10 @@ import { FormsModule, ReactiveFormsModule } from "@angular/forms";
 import { MatInputModule } from "@angular/material/input";
 import { MatButtonModule } from "@angular/material/button";
 import { MatTooltipModule } from "@angular/material/tooltip";
+import { MatTableModule } from "@angular/material/table";
+import { MatCardModule } from "@angular/material/card";
+import { OverlayModule } from "@angular/cdk/overlay";
+import { MatIconModule } from "@angular/material/icon";
 
 @NgModule({
   declarations: [SearchParametersDialogComponent],
@@ -20,11 +24,15 @@ import { MatTooltipModule } from "@angular/material/tooltip";
     MatButtonModule,
     MatDialogModule,
     MatFormFieldModule,
+    MatIconModule,
     MatInputModule,
     MatOptionModule,
     MatSelectModule,
     ReactiveFormsModule,
     MatTooltipModule,
+    MatTableModule,
+    MatCardModule,
+    OverlayModule,
   ],
 })
 export class SearchParametersDialogModule {}

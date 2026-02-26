@@ -4,16 +4,47 @@ import {
   ProposalFilters,
 } from "../state/proposals.store";
 import * as fromActions from "../actions/proposals.actions";
-import { Attachment, Dataset, DatasetInterface, Proposal } from "../models";
-import { ProposalInterface } from "shared/sdk";
+import { createMock } from "shared/MockStubs";
+import {
+  OutputDatasetObsoleteDto,
+  ProposalClass,
+} from "@scicatproject/scicat-sdk-ts-angular";
 
-const proposalData: ProposalInterface = {
+const proposal = createMock<ProposalClass>({
   proposalId: "testId",
   email: "testEmail",
   ownerGroup: "testGroup",
+  accessGroups: [],
+  createdAt: "",
+  createdBy: "",
+  isPublished: false,
+  title: "Test proposal",
+  type: "",
+  updatedAt: "",
+  updatedBy: "",
+  instrumentIds: [],
+});
+
+const dataset = createMock<OutputDatasetObsoleteDto>({
+  ownerGroup: "testGroup",
+  owner: "testOwner",
+  contactEmail: "testEmail",
+  sourceFolder: "testFolder",
+  creationTime: new Date(2019, 10, 7).toString(),
+  type: "raw",
+  pid: "testPid",
   attachments: [],
-};
-const proposal = new Proposal(proposalData);
+  createdAt: "",
+  createdBy: "",
+  creationLocation: "",
+  inputDatasets: [],
+  investigator: "",
+  numberOfFilesArchived: 0,
+  principalInvestigator: "",
+  updatedAt: "",
+  updatedBy: "",
+  usedSoftware: [],
+});
 
 describe("ProposalsReducer", () => {
   describe("on fetchProposalsCompleteAction", () => {
@@ -26,13 +57,13 @@ describe("ProposalsReducer", () => {
     });
   });
 
-  describe("on fetchCountCompletAction", () => {
+  describe("on fetchCountCompleteAction", () => {
     it("should set proposalsCount", () => {
-      const count = 100;
-      const action = fromActions.fetchCountCompleteAction({ count });
+      const count = { facetCounts: {}, allCounts: 100 };
+      const action = fromActions.fetchFacetCountsCompleteAction(count);
       const state = proposalsReducer(initialProposalsState, action);
 
-      expect(state.proposalsCount).toEqual(count);
+      expect(state.proposalsCount).toEqual(count.allCounts);
     });
   });
 
@@ -47,25 +78,24 @@ describe("ProposalsReducer", () => {
 
   describe("on fetchProposalDatasetsCompleteAction", () => {
     it("should set datasets", () => {
-      const data: DatasetInterface = {
-        ownerGroup: "testGroup",
-        owner: "testOwner",
-        contactEmail: "testEmail",
-        sourceFolder: "testFolder",
-        creationTime: new Date(2019, 10, 7),
-        type: "raw",
-      };
-      const datasets = [new Dataset(data)];
+      const datasets = [dataset];
+      const skip = 50;
+      const limit = 50;
+
       const action = fromActions.fetchProposalDatasetsCompleteAction({
         datasets,
+        skip,
+        limit,
       });
       const state = proposalsReducer(initialProposalsState, action);
 
       expect(state.datasets).toEqual(datasets);
+      expect(state.datasetFilters.skip).toBe(skip);
+      expect(state.datasetFilters.limit).toBe(limit);
     });
   });
 
-  describe("on fetchProposalDatasetsCountCompletAction", () => {
+  describe("on fetchProposalDatasetsCountCompleteAction", () => {
     it("should set datasetsCount", () => {
       const count = 100;
       const action = fromActions.fetchProposalDatasetsCountCompleteAction({
@@ -77,152 +107,64 @@ describe("ProposalsReducer", () => {
     });
   });
 
-  describe("on addAttachmentCompleteAction", () => {
-    it("should set attachments of currentProposal", () => {
-      initialProposalsState.currentProposal = proposal;
-      const attachment = new Attachment();
-      const action = fromActions.addAttachmentCompleteAction({ attachment });
-      const state = proposalsReducer(initialProposalsState, action);
-
-      expect(state.currentProposal.attachments).toContain(attachment);
-    });
-  });
-
-  describe("on updateAttachmentCaptionCompleteAction", () => {
-    it("should set attachments of currentProposal", () => {
-      const attachment = new Attachment();
-      initialProposalsState.currentProposal = proposal;
-      initialProposalsState.currentProposal.attachments = [attachment];
-
-      const action = fromActions.updateAttachmentCaptionCompleteAction({
-        attachment,
-      });
-      const state = proposalsReducer(initialProposalsState, action);
-
-      expect(state.currentProposal.attachments).toEqual([attachment]);
-    });
-  });
-
-  describe("on removeAttachmentCompleteAction", () => {
-    it("should remove an attachment from currentProposal", () => {
-      const attachmentId = "testId";
-      const attachment = new Attachment();
-      attachment.id = attachmentId;
-      initialProposalsState.currentProposal = proposal;
-      initialProposalsState.currentProposal.attachments = [attachment];
-
-      const action = fromActions.removeAttachmentCompleteAction({
-        attachmentId,
-      });
-      const state = proposalsReducer(initialProposalsState, action);
-
-      expect(state.currentProposal.attachments.length).toEqual(0);
-    });
-  });
-
-  describe("on prefillFiltersAction", () => {
-    it("should set filters and set hasPrefilledFilters to true", () => {
-      const values: Partial<ProposalFilters> = {
-        text: "test",
-      };
-      const action = fromActions.prefillFiltersAction({ values });
-      const state = proposalsReducer(initialProposalsState, action);
-
-      expect(state.proposalFilters.text).toEqual(values.text);
-      expect(state.hasPrefilledFilters).toEqual(true);
-    });
-  });
-
-  describe("on setTextFilterAction", () => {
-    it("should set text filter", () => {
-      const text = "test";
-      const action = fromActions.setTextFilterAction({ text });
-      const state = proposalsReducer(initialProposalsState, action);
-
-      expect(state.proposalFilters.text).toEqual(text);
-    });
-  });
-
-  describe("on setDateRangeFilterAction", () => {
-    it("should set dateRange filter", () => {
-      const begin = new Date().toISOString();
-      const end = new Date().toISOString();
-      const action = fromActions.setDateRangeFilterAction({
-        begin,
-        end,
-      });
-      const state = proposalsReducer(initialProposalsState, action);
-
-      expect(state.proposalFilters.dateRange.begin).toEqual(begin);
-      expect(state.proposalFilters.dateRange.end).toEqual(end);
-    });
-  });
-
-  describe("on clearFacetsAction", () => {
-    it("should clear filters while saving the filters limit", () => {
-      const limit = 10;
-      const page = 1;
-      const skip = limit * page;
-
-      const act = fromActions.changePageAction({ page, limit });
-      const sta = proposalsReducer(initialProposalsState, act);
-
-      expect(sta.proposalFilters.skip).toEqual(skip);
-
-      const action = fromActions.clearFacetsAction();
-      const state = proposalsReducer(sta, action);
-
-      expect(state.proposalFilters.skip).toEqual(0);
-      expect(state.proposalFilters.limit).toEqual(limit);
-      expect(state.proposalFilters.text).toEqual("");
-    });
-  });
-
-  describe("on changePageAction", () => {
-    it("should set skip and limit filters", () => {
-      const page = 1;
-      const limit = 25;
-      const skip = page * limit;
-      const action = fromActions.changePageAction({ page, limit });
-      const state = proposalsReducer(initialProposalsState, action);
-
-      expect(state.proposalFilters.skip).toEqual(skip);
-      expect(state.proposalFilters.limit).toEqual(limit);
-    });
-  });
-
-  describe("on changeDatasetsPageAction", () => {
-    it("should set skip and limit dataset filters", () => {
-      const page = 1;
-      const limit = 25;
-      const skip = page * limit;
-      const action = fromActions.changeDatasetsPageAction({ page, limit });
-      const state = proposalsReducer(initialProposalsState, action);
-
-      expect(state.datasetFilters.skip).toEqual(skip);
-      expect(state.datasetFilters.limit).toEqual(limit);
-    });
-  });
-
-  describe("on sortByColumnAction", () => {
-    it("should set sortField filter and set skip to 0", () => {
-      const column = "test";
-      const direction = "asc";
-      const sortField = column + ":" + direction;
-      const action = fromActions.sortByColumnAction({ column, direction });
-      const state = proposalsReducer(initialProposalsState, action);
-
-      expect(state.proposalFilters.sortField).toEqual(sortField);
-      expect(state.proposalFilters.skip).toEqual(0);
-    });
-  });
-
   describe("on clearProposalsStateAction", () => {
     it("it should set proposals state to initialProposState", () => {
       const action = fromActions.clearProposalsStateAction();
       const state = proposalsReducer(initialProposalsState, action);
 
       expect(state).toEqual(initialProposalsState);
+    });
+  });
+
+  describe("on addDatasetFilterAction", () => {
+    it("should set instrumentIds filter and set skip to 0", () => {
+      const instrumentId = "test";
+
+      const action = fromActions.addProposalFilterAction({
+        filterType: "multiSelect",
+        key: "instrumentIds",
+        value: instrumentId,
+      });
+      const state = proposalsReducer(initialProposalsState, action);
+
+      expect(state.proposalFilters.fields.instrumentIds).toContain(
+        instrumentId,
+      );
+      expect(state.proposalFilters.skip).toEqual(0);
+    });
+  });
+
+  describe("on removeDatasetFilterAction", () => {
+    it("should remove instrumentIds filter and set skip to 0", () => {
+      const instrumentId = "test";
+
+      const action = fromActions.removeProposalFilterAction({
+        filterType: "checkbox",
+        key: "instrumentIds",
+        value: instrumentId,
+      });
+      const state = proposalsReducer(initialProposalsState, action);
+
+      expect(state.proposalFilters.fields.instrumentIds).not.toContain(
+        instrumentId,
+      );
+      expect(state.proposalFilters.skip).toEqual(0);
+    });
+  });
+
+  describe("on setDateRangeFilterAction", () => {
+    it("should set startTime filter", () => {
+      const begin = new Date(2018, 1, 2).toISOString();
+      const end = new Date(2018, 1, 3).toISOString();
+
+      const action = fromActions.addProposalFilterAction({
+        filterType: "dateRange",
+        key: "startTime",
+        value: { begin, end },
+      });
+      const state = proposalsReducer(initialProposalsState, action);
+
+      expect(state.proposalFilters.fields.startTime).toEqual({ begin, end });
     });
   });
 });

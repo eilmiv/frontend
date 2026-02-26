@@ -1,105 +1,68 @@
+import { Component, OnInit, OnDestroy } from "@angular/core";
+import { ActivatedRoute } from "@angular/router";
+import { Store } from "@ngrx/store";
+import { ProposalClass } from "@scicatproject/scicat-sdk-ts-angular";
+import { Subscription, BehaviorSubject, combineLatest } from "rxjs";
+import { fetchInstrumentsAction } from "state-management/actions/instruments.actions";
 import {
-  AfterViewChecked,
-  ChangeDetectorRef,
-  Component,
-  OnDestroy,
-} from "@angular/core";
-import { Router } from "@angular/router";
-import { AppConfigService } from "app-config.service";
-import { Column } from "shared/modules/shared-table/shared-table.module";
-import { Proposal } from "shared/sdk";
-import { ExportExcelService } from "shared/services/export-excel.service";
-import { ScicatDataService } from "shared/services/scicat-data-service";
-import { SciCatDataSource } from "shared/services/scicat.datasource";
+  fetchFacetCountsAction,
+  fetchProposalsAction,
+  setInitialProposalsFiltersAction,
+} from "state-management/actions/proposals.actions";
 
 @Component({
   selector: "app-proposal-dashboard",
   templateUrl: "./proposal-dashboard.component.html",
   styleUrls: ["./proposal-dashboard.component.scss"],
+  standalone: false,
 })
-export class ProposalDashboardComponent
-  implements OnDestroy, AfterViewChecked {
-  columns: Column[] = [
-    {
-      id: "proposalId",
-      label: "Proposal ID",
-      canSort: true,
-      icon: "perm_device_information",
-      matchMode: "contains",
-      hideOrder: 0,
-    },
-    {
-      id: "title",
-      label: "Title",
-      icon: "description",
-      canSort: true,
-      matchMode: "contains",
-      hideOrder: 1,
-    },
-    {
-      id: "firstname",
-      label: "First Name",
-      icon: "badge",
-      canSort: true,
-      matchMode: "contains",
-      hideOrder: 2,
-    },
-    {
-      id: "lastname",
-      label: "Last Name",
-      icon: "badge",
-      canSort: true,
-      matchMode: "contains",
-      hideOrder: 3,
-    },
-    {
-      id: "startTime",
-      icon: "timer",
-      label: "Start Date",
-      format: "date",
-      canSort: true,
-      matchMode: "between",
-      hideOrder: 4,
-      sortDefault: "desc",
-    },
-    {
-      id: "endTime",
-      icon: "timer_off",
-      label: "End Date",
-      format: "date",
-      canSort: true,
-      matchMode: "between",
-      hideOrder: 5,
-    },
-  ];
-  tableDefinition = {
-    collection: "Proposals",
-    columns: this.columns,
-  };
-  dataSource: SciCatDataSource;
+export class ProposalDashboardComponent implements OnInit, OnDestroy {
+  subscriptions: Subscription[] = [];
+  dataSource$ = new BehaviorSubject<ProposalClass[]>([]);
+  params$ = this.route.queryParams;
+  defaultPageSize = 10;
+  sideFilterCollapsed = false;
+
   constructor(
-    private appConfigService: AppConfigService,
-    private cdRef: ChangeDetectorRef,
-    private dataService: ScicatDataService,
-    private exportService: ExportExcelService,
-    private router: Router
-  ) {
-    this.dataSource = new SciCatDataSource(
-      this.appConfigService,
-      this.dataService,
-      this.exportService,
-      this.tableDefinition
+    private store: Store,
+    private route: ActivatedRoute,
+  ) {}
+
+  ngOnInit(): void {
+    this.store.dispatch(fetchInstrumentsAction({ skip: 0, limit: 1000 }));
+
+    this.subscriptions.push(
+      combineLatest([this.params$]).subscribe(([queryParams]) => {
+        const limit = queryParams.pageSize
+          ? +queryParams.pageSize
+          : this.defaultPageSize;
+        const skip = queryParams.pageIndex ? +queryParams.pageIndex * limit : 0;
+        const searchQuery = JSON.parse(queryParams.searchQuery || "{}");
+        this.store.dispatch(
+          setInitialProposalsFiltersAction({ fields: searchQuery }),
+        );
+        this.store.dispatch(
+          fetchProposalsAction({
+            limit,
+            skip,
+            search: searchQuery,
+            sortColumn: queryParams.sortColumn,
+            sortDirection: queryParams.sortDirection,
+          }),
+        );
+
+        this.store.dispatch(fetchFacetCountsAction());
+      }),
     );
   }
 
-  ngAfterViewChecked() {
-    this.cdRef.detectChanges();
+  onSideFilterCollapsedChange(collapsed: boolean) {
+    this.sideFilterCollapsed = collapsed;
   }
+
   ngOnDestroy() {
-    this.dataSource.disconnectExportData();
-  }
-  onRowClick(proposal: Proposal) {
-    const id = encodeURIComponent(proposal.proposalId);
-    this.router.navigateByUrl("/proposals/" + id);
+    this.subscriptions.forEach((sub) => {
+      sub.unsubscribe();
+    });
   }
 }

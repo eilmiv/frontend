@@ -9,12 +9,11 @@ import {
   ChangeDetectorRef,
 } from "@angular/core";
 import { Store } from "@ngrx/store";
-import { LoopBackConfig } from "shared/sdk";
 import {
   clearMessageAction,
   fetchCurrentUserAction,
+  loadDefaultSettings,
   logoutAction,
-  setDatasetTableColumnsAction,
 } from "state-management/actions/user.actions";
 import { MatSnackBar } from "@angular/material/snack-bar";
 import { Meta, Title } from "@angular/platform-browser";
@@ -24,18 +23,21 @@ import {
   selectUserMessage,
 } from "state-management/selectors/user.selectors";
 import { MessageType } from "state-management/models";
-import { AppConfigService, AppConfig as Config } from "app-config.service";
+import { AppConfigService, AppConfigInterface } from "app-config.service";
+import { Configuration } from "@scicatproject/scicat-sdk-ts-angular";
+import { TranslateService } from "@ngx-translate/core";
 
 @Component({
   selector: "app-root",
   templateUrl: "./app.component.html",
   styleUrls: ["./app.component.scss"],
   encapsulation: ViewEncapsulation.None,
+  standalone: false,
 })
 export class AppComponent implements OnDestroy, OnInit, AfterViewChecked {
   loading$ = this.store.select(selectIsLoading);
 
-  config: Config;
+  config: AppConfigInterface;
 
   title: string;
   facility: string;
@@ -45,11 +47,13 @@ export class AppComponent implements OnDestroy, OnInit, AfterViewChecked {
   constructor(
     @Inject(APP_CONFIG) public appConfig: AppConfig,
     private appConfigService: AppConfigService,
+    private apiConfigService: Configuration,
     private cdRef: ChangeDetectorRef,
     private metaService: Meta,
     public snackBar: MatSnackBar,
+    public translateService: TranslateService,
     private titleService: Title,
-    private store: Store
+    private store: Store,
   ) {
     this.config = this.appConfigService.getConfig();
     this.facility = this.config.facility ?? "";
@@ -60,6 +64,11 @@ export class AppComponent implements OnDestroy, OnInit, AfterViewChecked {
       name: "description",
       content: "SciCat metadata catalogue at" + this.facility,
     });
+    // ngx-translate requires a "currentLang" to be set with .use(...).
+    // We don't actually have multiple real languages, instead we load the full
+    // labelsLocalization object (dataset/proposal...) and scope keys in the pipe.
+    // So we just pick a dummy lang token ("en") to satisfy ngx-translate.
+    this.translateService.use("en");
   }
 
   /**
@@ -68,12 +77,10 @@ export class AppComponent implements OnDestroy, OnInit, AfterViewChecked {
    * @memberof AppComponent
    */
   ngOnInit() {
-    LoopBackConfig.setBaseURL(this.config.lbBaseURL);
-    console.log(LoopBackConfig.getPath());
+    this.apiConfigService.basePath = this.config.lbBaseURL;
+    console.log(this.apiConfigService.basePath);
 
-    this.store.dispatch(
-      setDatasetTableColumnsAction({ columns: this.config.localColumns })
-    );
+    this.store.dispatch(loadDefaultSettings({ config: this.config }));
 
     this.store.dispatch(fetchCurrentUserAction());
     if (window.location.pathname.indexOf("logout") !== -1) {

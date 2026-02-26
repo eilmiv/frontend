@@ -16,7 +16,12 @@ import { saveCustomMetadataAction } from "state-management/actions/instruments.a
 import { MatCardModule } from "@angular/material/card";
 import { MatIconModule } from "@angular/material/icon";
 import { MatTabsModule } from "@angular/material/tabs";
-import { FlexLayoutModule } from "@angular/flex-layout";
+import { FlexLayoutModule } from "@ngbracket/ngx-layout";
+import { AppConfigService } from "app-config.service";
+
+const getConfig = () => ({
+  editMetadataEnabled: true,
+});
 
 describe("InstrumentDetailsComponent", () => {
   let component: InstrumentDetailsComponent;
@@ -25,33 +30,32 @@ describe("InstrumentDetailsComponent", () => {
   let store: MockStore;
   let dispatchSpy;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        schemas: [NO_ERRORS_SCHEMA],
-        declarations: [InstrumentDetailsComponent],
-        imports: [
-          FlexLayoutModule,
-          MatCardModule,
-          MatIconModule,
-          MatTabsModule,
-        ],
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      schemas: [NO_ERRORS_SCHEMA],
+      declarations: [InstrumentDetailsComponent],
+      imports: [FlexLayoutModule, MatCardModule, MatIconModule, MatTabsModule],
+      providers: [
+        provideMockStore({
+          selectors: [{ selector: selectCurrentInstrument, value: {} }],
+        }),
+      ],
+    });
+    TestBed.overrideComponent(InstrumentDetailsComponent, {
+      set: {
         providers: [
-          provideMockStore({
-            selectors: [{ selector: selectCurrentInstrument, value: {} }],
-          }),
+          {
+            provide: AppConfigService,
+            useValue: {
+              getConfig,
+            },
+          },
+          { provide: ActivatedRoute, useClass: MockActivatedRoute },
         ],
-      });
-      TestBed.overrideComponent(InstrumentDetailsComponent, {
-        set: {
-          providers: [
-            { provide: ActivatedRoute, useClass: MockActivatedRoute },
-          ],
-        },
-      });
-      TestBed.compileComponents();
-    })
-  );
+      },
+    });
+    TestBed.compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(InstrumentDetailsComponent);
@@ -82,8 +86,14 @@ describe("InstrumentDetailsComponent", () => {
 
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        saveCustomMetadataAction({ pid, customMetadata })
+        saveCustomMetadataAction({ pid, customMetadata }),
       );
     });
+  });
+
+  it("should track unsaved changes", () => {
+    expect(component.hasUnsavedChanges()).toBeFalse();
+    component.onHasUnsavedChanges(true);
+    expect(component.hasUnsavedChanges()).toBeTrue();
   });
 });

@@ -28,10 +28,7 @@
         </mat-header-cell>
         <mat-cell *matCellDef="let logbook">
           <div fxLayout="column" *ngIf="logbook.messages.length > 0">
-            {{
-              logbook.messages[0].origin_server_ts
-                | date: "yyyy-MM-dd, EEE HH:mm"
-            }}
+            {{ logbook.messages[0].origin_server_ts | date }}
           </div>
           <div fxLayout="column" *ngIf="logbook.messages.length === 0">
             No entries.
@@ -51,10 +48,7 @@
         </mat-header-cell>
         <mat-cell *matCellDef="let logbook">
           <div fxLayout="column" *ngIf="logbook.messages.length > 0">
-            {{
-              logbook.messages[0].sender
-                | slice: 1:logbook.messages[0].sender.indexOf(":")
-            }}
+            {{ logbook.messages[0].senderName }}
           </div>
           <div fxLayout="column" *ngIf="logbook.messages.length === 0">--</div>
         </mat-cell>
@@ -107,7 +101,9 @@
 
   <ng-template #noLogbooks>
     <mat-card class="no-logbooks-message">
-      <mat-icon>info</mat-icon> No logbooks available.
+      <mat-card-content>
+        <mat-icon>info</mat-icon> No logbooks available.
+      </mat-card-content>
     </mat-card>
   </ng-template>
 </ng-container>

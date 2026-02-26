@@ -10,7 +10,15 @@ const reducer = createReducer(
     (state, { columns }): UserState => ({
       ...state,
       columns,
-    })
+    }),
+  ),
+
+  on(
+    fromActions.updateHasFetchedSettings,
+    (state, { hasFetchedSettings }): UserState => ({
+      ...state,
+      hasFetchedSettings,
+    }),
   ),
 
   on(
@@ -19,7 +27,8 @@ const reducer = createReducer(
       ...state,
       isLoggingIn: true,
       isLoggedIn: false,
-    })
+      hasFetchedSettings: false,
+    }),
   ),
 
   on(
@@ -30,7 +39,8 @@ const reducer = createReducer(
       accountType,
       isLoggingIn: false,
       isLoggedIn: true,
-    })
+      hasFetchedSettings: false,
+    }),
   ),
   on(
     fromActions.loginFailedAction,
@@ -38,7 +48,7 @@ const reducer = createReducer(
       ...state,
       isLoggingIn: false,
       isLoggedIn: false,
-    })
+    }),
   ),
 
   on(
@@ -47,7 +57,7 @@ const reducer = createReducer(
       ...state,
       currentUser: user,
       isLoggedIn: true,
-    })
+    }),
   ),
 
   on(
@@ -55,33 +65,70 @@ const reducer = createReducer(
     (state, { userIdentity }): UserState => ({
       ...state,
       profile: userIdentity.profile,
-    })
+    }),
   ),
 
   on(
     fromActions.fetchUserSettingsCompleteAction,
     (state, { userSettings }): UserState => {
-      const { datasetCount, jobCount, columns } = userSettings;
-      const settings = { ...state.settings, datasetCount, jobCount };
+      const { datasetCount, jobCount, columns, externalSettings } =
+        userSettings as any;
+      const settings = {
+        ...state.settings,
+        datasetCount,
+        jobCount,
+      };
       if (columns.length > 0) {
-        return { ...state, settings, columns };
+        return {
+          ...state,
+          settings,
+          columns,
+          tablesSettings: externalSettings?.tablesSettings,
+          hasFetchedSettings: true,
+        };
       } else {
-        return { ...state, settings };
+        return {
+          ...state,
+          settings,
+          tablesSettings: externalSettings?.tablesSettings,
+          hasFetchedSettings: true,
+        };
       }
-    }
+    },
   ),
 
   on(
     fromActions.updateUserSettingsCompleteAction,
     (state, { userSettings }): UserState => {
-      const { datasetCount, jobCount, columns } = userSettings;
+      const {
+        datasetCount,
+        jobCount,
+        columns = [],
+        externalSettings,
+        filters,
+        conditions,
+      } = userSettings as any;
       const settings = { ...state.settings, datasetCount, jobCount };
+
       if (columns.length > 0) {
-        return { ...state, settings, columns };
+        return {
+          ...state,
+          settings,
+          columns,
+          tablesSettings: externalSettings?.tablesSettings,
+          filters: filters || state.filters,
+          conditions: conditions || state.conditions,
+        };
       } else {
-        return { ...state, settings };
+        return {
+          ...state,
+          settings,
+          tablesSettings: externalSettings?.tablesSettings,
+          filters: filters || state.filters,
+          conditions: conditions || state.conditions,
+        };
       }
-    }
+    },
   ),
 
   on(
@@ -89,34 +136,34 @@ const reducer = createReducer(
     (state, { token }): UserState => ({
       ...state,
       scicatToken: token,
-    })
+    }),
   ),
 
   on(
     fromActions.logoutAction,
     (): UserState => ({
       ...initialUserState,
-    })
+    }),
   ),
 
   on(
     fromActions.logoutCompleteAction,
     (): UserState => ({
       ...initialUserState,
-    })
+    }),
   ),
 
   on(fromActions.addCustomColumnsAction, (state, { names }): UserState => {
     const existingColumns = [...state.columns];
 
     const standardColumns = existingColumns.filter(
-      (column) => column.type === "standard"
+      (column) => column.type === "standard",
     );
 
     let order = standardColumns.length;
 
     const enabledCustomColumns = existingColumns.filter(
-      (column) => column.type === "custom" && column.enabled
+      (column) => column.type === "custom" && column.enabled,
     );
 
     enabledCustomColumns.forEach((column) => {
@@ -125,7 +172,7 @@ const reducer = createReducer(
     });
 
     const enabledCustomColumnNames = enabledCustomColumns.map(
-      (column) => column.name
+      (column) => column.name,
     );
 
     const newColumns = names
@@ -158,7 +205,7 @@ const reducer = createReducer(
         }
       });
       return { ...state, columns };
-    }
+    },
   ),
   on(
     fromActions.deselectColumnAction,
@@ -170,34 +217,22 @@ const reducer = createReducer(
         }
       });
       return { ...state, columns };
-    }
+    },
   ),
-  on(fromActions.deselectAllCustomColumnsAction, (state): UserState => {
-    const customColumns = [...state.columns].filter(
-      (column) => column.type !== "standard"
-    );
-    customColumns.forEach((column) => (column.enabled = false));
-    const customColumnNames = customColumns.map((column) => column.name);
-
-    const columns = [...state.columns]
-      .filter((column) => !customColumnNames.includes(column.name))
-      .concat(customColumns);
-    return { ...state, columns };
-  }),
 
   on(
     fromActions.showMessageAction,
     (state, { message }): UserState => ({
       ...state,
       message,
-    })
+    }),
   ),
   on(
     fromActions.clearMessageAction,
     (state): UserState => ({
       ...state,
       message: initialUserState.message,
-    })
+    }),
   ),
 
   on(
@@ -205,7 +240,7 @@ const reducer = createReducer(
     (state, { settings }): UserState => ({
       ...state,
       settings,
-    })
+    }),
   ),
 
   on(
@@ -213,15 +248,29 @@ const reducer = createReducer(
     (state): UserState => ({
       ...state,
       isLoading: true,
-    })
+    }),
   ),
   on(
     fromActions.loadingCompleteAction,
     (state): UserState => ({
       ...state,
       isLoading: false,
-    })
-  )
+    }),
+  ),
+  on(
+    fromActions.updateFilterConfigs,
+    (state, { filterConfigs }): UserState => ({
+      ...state,
+      filters: filterConfigs,
+    }),
+  ),
+  on(
+    fromActions.updateConditionsConfigs,
+    (state, { conditionConfigs }): UserState => ({
+      ...state,
+      conditions: conditionConfigs,
+    }),
+  ),
 );
 
 export const userReducer = (state: UserState | undefined, action: Action) => {

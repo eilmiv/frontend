@@ -1,9 +1,9 @@
 import { Injectable } from "@angular/core";
 import { HttpClient, HttpParams } from "@angular/common/http";
 import { Observable } from "rxjs";
-import { LoopBackAuth } from "shared/sdk";
 import { DateTime } from "luxon";
 import { Column } from "shared/modules/shared-table/shared-table.module";
+import { AuthService } from "./auth/auth.service";
 
 export interface FilterLimits {
   limit: number;
@@ -15,7 +15,10 @@ export interface FilterLimits {
   providedIn: "root",
 })
 export class ScicatDataService {
-  constructor(private http: HttpClient, private auth: LoopBackAuth) {}
+  constructor(
+    private http: HttpClient,
+    private authService: AuthService,
+  ) {}
 
   findDataById(url: string, dataId: number): Observable<any> {
     return this.http.get<any>(`${url}/${dataId}`);
@@ -24,7 +27,7 @@ export class ScicatDataService {
   // TODO when do I need to use "mode" syntax (may be for nested keys ?)
   createColumnFilterMongoExpression = (
     columns: Column[],
-    filterExpressions: any
+    filterExpressions: any,
   ) => {
     const result: Record<string, any> = {};
     if (filterExpressions) {
@@ -104,7 +107,6 @@ export class ScicatDataService {
         }
       }
     });
-    // console.log("Result of map after single syntax:",result)
 
     return result;
   };
@@ -116,7 +118,8 @@ export class ScicatDataService {
     sortField?: string,
     sortOrder = "asc",
     pageNumber = 0,
-    pageSize = 10
+    pageSize = 10,
+    isFilesDashboard = false,
   ): Observable<any[]> {
     // Dataset filter syntax (not used here)
     // {"limit":3,"skip":11,"where":{"ownerGroup":"p16633"},"order":"size ASC"}
@@ -136,7 +139,7 @@ export class ScicatDataService {
     // ("findalldata:", filterExpressions)
     const filterFields = this.createColumnFilterMongoExpression(
       columns,
-      filterExpressions
+      filterExpressions,
     );
     const limits: FilterLimits = {
       limit: pageSize,
@@ -149,10 +152,26 @@ export class ScicatDataService {
     const params = new HttpParams()
       .set("fields", JSON.stringify(filterFields))
       .set("limits", JSON.stringify(limits))
-      .append("access_token", this.auth.getToken().id);
-    return this.http.get<any[]>(`${url}/fullquery`, {
+      .append("access_token", `Bearer ${this.authService.getToken().id}`);
+
+    // NOTE: For published data endpoint we don't have fullquery and fullfacet and that's why it is a bit special case.
+    if (url.includes("publishedData")) {
+      return this.http.get<any[]>(url, {
+        params,
+        headers: {
+          Authorization: `Bearer ${this.authService.getAccessTokenId()}`,
+        },
+      });
+    }
+
+    const origDatablocksFiles =
+      url.includes("Origdatablocks") && isFilesDashboard ? "/files" : "";
+
+    return this.http.get<any[]>(`${url}/fullquery${origDatablocksFiles}`, {
       params,
-      headers: { Authorization: this.auth.getAccessTokenId() },
+      headers: {
+        Authorization: `Bearer ${this.authService.getAccessTokenId()}`,
+      },
     });
   }
 
@@ -162,20 +181,36 @@ export class ScicatDataService {
   getCount(
     url: string,
     columns: Column[],
-    filterExpressions?: any
+    filterExpressions?: any,
+    isFilesDashboard = false,
   ): Observable<any> {
     const filterFields = this.createColumnFilterMongoExpression(
       columns,
-      filterExpressions
+      filterExpressions,
     );
     const params = new HttpParams()
       .set("fields", JSON.stringify(filterFields))
       .set("facets", JSON.stringify([]))
-      .append("access_token", this.auth.getToken().id);
+      .append("access_token", `Bearer ${this.authService.getToken().id}`);
 
-    return this.http.get<any>(`${url}/fullfacet`, {
+    // NOTE: For published data endpoint we don't have fullquery and fullfacet and that's why it is a bit special case.
+    if (url.includes("publishedData")) {
+      return this.http.get<any>(`${url}/count`, {
+        params,
+        headers: {
+          Authorization: `Bearer ${this.authService.getAccessTokenId()}`,
+        },
+      });
+    }
+
+    const origDatablocksFiles =
+      url.includes("Origdatablocks") && isFilesDashboard ? "/files" : "";
+
+    return this.http.get<any>(`${url}/fullfacet${origDatablocksFiles}`, {
       params,
-      headers: { Authorization: this.auth.getAccessTokenId() },
+      headers: {
+        Authorization: `Bearer ${this.authService.getAccessTokenId()}`,
+      },
     });
   }
 }

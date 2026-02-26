@@ -1,26 +1,27 @@
 import { DatasetState } from "state-management/state/datasets.store";
 import { createFeatureSelector, createSelector } from "@ngrx/store";
+import { selectFilters as selectUserFilters } from "state-management/selectors/user.selectors";
 
 const selectDatasetState = createFeatureSelector<DatasetState>("datasets");
 
 export const selectDatasets = createSelector(
   selectDatasetState,
-  (state) => state.datasets
+  (state) => state.datasets,
 );
 
 export const selectSelectedDatasets = createSelector(
   selectDatasetState,
-  (state) => state.selectedSets
+  (state) => state.selectedSets,
 );
 
 export const selectMetadataKeys = createSelector(
   selectDatasetState,
-  (state) => state.metadataKeys
+  (state) => state.metadataKeys,
 );
 
 export const selectCurrentDataset = createSelector(
   selectDatasetState,
-  (state) => state.currentSet
+  (state) => state.currentSet,
 );
 
 export const selectCurrentDatasetWithoutFileInfo = createSelector(
@@ -31,69 +32,87 @@ export const selectCurrentDatasetWithoutFileInfo = createSelector(
       return theRest;
     }
     return undefined;
-  }
+  },
+);
+
+export const selectCurrentDatasetWithOnlyScientificMetadataKey = createSelector(
+  selectCurrentDataset,
+  (currentSet) => {
+    if (currentSet) {
+      return currentSet?.scientificMetadata;
+    }
+    return undefined;
+  },
 );
 
 export const selectCurrentOrigDatablocks = createSelector(
   selectCurrentDataset,
-  (dataset) => (dataset ? dataset.origdatablocks : [])
+  (dataset) => (dataset ? dataset.origdatablocks : []),
 );
 
 export const selectCurrentDatablocks = createSelector(
   selectCurrentDataset,
-  (dataset) => (dataset ? dataset.datablocks : [])
+  (dataset) => (dataset ? dataset.datablocks : []),
 );
 
 export const selectCurrentAttachments = createSelector(
   selectCurrentDataset,
-  (dataset) => (dataset ? dataset.attachments : [])
+  (dataset) => (dataset ? dataset.attachments : []),
+);
+
+export const selectPagination = createSelector(
+  selectDatasetState,
+  (state) => state.pagination,
 );
 
 // === Filters ===
 
 export const selectFilters = createSelector(
   selectDatasetState,
-  (state) => state.filters
+  (state) => state.filters,
 );
 
 export const selectTextFilter = createSelector(
   selectFilters,
-  (filters) => filters.text || ""
+  (filters) => filters.text || "",
 );
+
+export const selectFilterByKey = (key: string) =>
+  createSelector(selectFilters, (filters) => filters[key] || []);
 
 export const selectLocationFilter = createSelector(
   selectFilters,
-  (filters) => filters.creationLocation
+  (filters) => filters.creationLocation,
 );
 
 export const selectGroupFilter = createSelector(
   selectFilters,
-  (filters) => filters.ownerGroup
+  (filters) => filters.ownerGroup,
 );
 
 export const selectTypeFilter = createSelector(
   selectFilters,
-  (filters) => filters.type
+  (filters) => filters.type,
 );
 
 export const selectKeywordsFilter = createSelector(
   selectFilters,
-  (filters) => filters.keywords
+  (filters) => filters.keywords,
 );
 
 export const selectCreationTimeFilter = createSelector(
   selectFilters,
-  (filters) => filters.creationTime
+  (filters) => filters.creationTime,
 );
 
 export const selectArchiveViewMode = createSelector(
   selectFilters,
-  (filters) => filters.modeToggle
+  (filters) => filters.modeToggle,
 );
 
 export const selectPublicViewMode = createSelector(
   selectFilters,
-  (filters) => filters.isPublished
+  (filters) => filters.isPublished,
 );
 
 export const selectHasAppliedFilters = createSelector(
@@ -107,39 +126,42 @@ export const selectHasAppliedFilters = createSelector(
     filters.scientific.length > 0 ||
     (filters.creationTime &&
       (filters.creationTime.begin !== null ||
-        filters.creationTime.end !== null))
+        filters.creationTime.end !== null)),
 );
 
 export const selectScientificConditions = createSelector(
   selectFilters,
-  (filters) => filters.scientific
+  (filters) => filters.scientific,
 );
 
 // === Facet Counts ===
 
 const selectFacetCounts = createSelector(
   selectDatasetState,
-  (state) => state.facetCounts || {}
+  (state) => state.facetCounts || {},
 );
+
+export const selectFacetCountByKey = (key: string) =>
+  createSelector(selectFacetCounts, (counts) => counts[key] || []);
 
 export const selectLocationFacetCounts = createSelector(
   selectFacetCounts,
-  (counts) => counts.creationLocation || []
+  (counts) => counts.creationLocation || [],
 );
 
 export const selectGroupFacetCounts = createSelector(
   selectFacetCounts,
-  (counts) => counts.ownerGroup || []
+  (counts) => counts.ownerGroup || [],
 );
 
 export const selectTypeFacetCounts = createSelector(
   selectFacetCounts,
-  (counts) => counts.type || []
+  (counts) => counts.type || [],
 );
 
 export const selectKeywordFacetCounts = createSelector(
   selectFacetCounts,
-  (counts) => counts.keywords || []
+  (counts) => counts.keywords || [],
 );
 
 // === Querying ===
@@ -158,61 +180,95 @@ const restrictFilter = (filter: any, allowedKeys?: string[]) => {
   }, {});
 };
 
-export const selectFullqueryParams = createSelector(selectFilters, (filter) => {
-  // don't query with modeToggle, it's only in filters for persistent routing
-  const { skip, limit, sortField, modeToggle, ...theRest } = filter;
-  const limits = { skip, limit, order: sortField };
-  const query = restrictFilter(theRest);
-  return { query: JSON.stringify(query), limits };
-});
+export const selectFullqueryParams = createSelector(
+  selectDatasetState,
+  (state) => {
+    const filter = state.filters;
+    const pagination = state.pagination;
+    // don't query with modeToggle, it's only in filters for persistent routing
+    const { skip, limit, sortField, modeToggle, ...theRest } = filter;
 
-export const selectFullfacetParams = createSelector(selectFilters, (filter) => {
-  const { skip, limit, sortField, modeToggle, ...theRest } = filter;
-  const fields = restrictFilter(theRest);
-  const facets = [
-    "type",
-    "creationLocation",
-    "ownerGroup",
-    "keywords",
-  ];
-  return { fields, facets };
-});
+    const limits = { ...pagination, order: sortField };
+    const query = restrictFilter(theRest);
+
+    return { query, limits };
+  },
+);
+
+export const selectFullfacetParams = createSelector(
+  selectDatasetState,
+  selectUserFilters,
+  (state, userFilters) => {
+    const filter = state.filters;
+    const pagination = state.pagination;
+    const { skip, limit, sortField, modeToggle, ...theRest } = {
+      ...filter,
+      ...pagination,
+    };
+    const fields = restrictFilter(theRest);
+    const facets = userFilters
+      .filter(
+        (f) => f.enabled && (f.type === "multiSelect" || f.type === "checkbox"),
+      )
+      .map((f) => f.key);
+
+    return { fields, facets };
+  },
+);
 
 // === Misc. ===
 
 export const selectTotalSets = createSelector(
   selectDatasetState,
-  (state) => state.totalCount
+  (state) => state.totalCount,
 );
 
-export const selectPage = createSelector(selectFilters, (filters) => {
-  const { skip, limit } = filters;
+export const selectPage = createSelector(selectPagination, (pagination) => {
+  const { skip, limit } = pagination;
   return skip / limit;
 });
 
 export const selectDatasetsPerPage = createSelector(
-  selectFilters,
-  (filters) => filters.limit
+  selectPagination,
+  (pagination) => pagination.limit,
 );
 
 export const selectSearchTerms = createSelector(
   selectDatasetState,
-  (state) => state.searchTerms
+  (state) => state.searchTerms,
+);
+
+export const selectPidTerms = createSelector(
+  selectDatasetState,
+  (state) => state.pidTerms,
 );
 
 export const selectKeywordsTerms = createSelector(
   selectDatasetState,
-  (state) => state.keywordsTerms
+  (state) => state.keywordsTerms,
 );
 
 export const selectHasPrefilledFilters = createSelector(
   selectDatasetState,
-  (state) => state.hasPrefilledFilters
+  (state) => state.hasPrefilledFilters,
 );
 
 export const selectDatasetsInBatch = createSelector(
   selectDatasetState,
-  (state) => state.batch
+  (state) => state.batch,
+);
+
+export const selectIsCurrentDatasetInBatch = createSelector(
+  selectDatasetState,
+  (state) => {
+    const current = state.currentSet;
+    return !!current && state.batch.some((d) => d?.pid === current.pid);
+  },
+);
+
+export const selectIsBatchNonEmpty = createSelector(
+  selectDatasetsInBatch,
+  (batch) => batch.length > 0,
 );
 
 export const selectDatasetsInBatchIndicator = createSelector(
@@ -229,24 +285,33 @@ export const selectDatasetsInBatchIndicator = createSelector(
     }
 
     return String(inBatchCount);
-  }
+  },
 );
 
 export const selectOpenwhiskResult = createSelector(
   selectDatasetState,
-  (state) => state.openwhiskResult
+  (state) => state.openwhiskResult,
 );
 
 export const selectRelatedDatasetsPageViewModel = createSelector(
   selectDatasetState,
-  ({ relatedDatasets, relatedDatasetsCount, relatedDatasetsFilters }) => ({
+  ({ relatedDatasets, relatedDatasetsCount }) => ({
     relatedDatasets,
     relatedDatasetsCount,
-    relatedDatasetsFilters,
-  })
+  }),
 );
 
 export const selectRelatedDatasetsFilters = createSelector(
   selectDatasetState,
-  (state) => state.relatedDatasetsFilters
+  (state) => state.relatedDatasetsFilters,
+);
+
+export const selectRelatedDatasetsCurrentPage = createSelector(
+  selectRelatedDatasetsFilters,
+  (filters) => filters.skip / filters.limit,
+);
+
+export const selectRelatedDatasetsPerPage = createSelector(
+  selectRelatedDatasetsFilters,
+  (filters) => filters.limit,
 );

@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy } from "@angular/core";
 import { Router } from "@angular/router";
 import { Store } from "@ngrx/store";
-import { Job } from "shared/sdk";
+import { OutputJobV3Dto } from "@scicatproject/scicat-sdk-ts-angular";
 import { Subscription } from "rxjs";
 import {
   selectJobs,
@@ -40,6 +40,7 @@ export interface JobsTableData {
   selector: "app-jobs-dashboard",
   templateUrl: "./jobs-dashboard.component.html",
   styleUrls: ["./jobs-dashboard.component.scss"],
+  standalone: false,
 })
 export class JobsDashboardComponent implements OnInit, OnDestroy {
   jobsCount$ = this.store.select(selectJobsCount);
@@ -82,26 +83,23 @@ export class JobsDashboardComponent implements OnInit, OnDestroy {
   constructor(
     private datePipe: DatePipe,
     private router: Router,
-    private store: Store
+    private store: Store,
   ) {}
 
   private enumKeys<T>(enumType: T): (keyof T)[] {
     return (Object.keys(enumType) as Array<keyof T>).filter(
-      (value) => isNaN(Number(value)) !== false
+      (value) => isNaN(Number(value)) !== false,
     );
   }
 
-  formatTableData(jobs: Job[]): JobsTableData[] {
+  formatTableData(jobs: OutputJobV3Dto[]): JobsTableData[] {
     let tableData: JobsTableData[] = [];
     if (jobs) {
       tableData = jobs.map((job) => ({
         id: job.id,
         initiator: job.emailJobInitiator,
         type: job.type,
-        createdAt: this.datePipe.transform(
-          job.creationTime,
-          "yyyy-MM-dd HH:mm"
-        ),
+        createdAt: job.creationTime,
         statusMessage: job.jobStatusMessage,
       }));
     }
@@ -141,11 +139,11 @@ export class JobsDashboardComponent implements OnInit, OnDestroy {
 
   onPageChange(event: PageChangeEvent) {
     this.store.dispatch(
-      changePageAction({ page: event.pageIndex, limit: event.pageSize })
+      changePageAction({ page: event.pageIndex, limit: event.pageSize }),
     );
   }
 
-  onRowClick(job: Job) {
+  onRowClick(job: JobsTableData) {
     const id = encodeURIComponent(job.id);
     this.router.navigateByUrl("/user/jobs/" + id);
   }
@@ -175,7 +173,7 @@ export class JobsDashboardComponent implements OnInit, OnDestroy {
     this.subscriptions.push(
       this.store.select(selectJobs).subscribe((jobs) => {
         this.jobs = this.formatTableData(jobs);
-      })
+      }),
     );
 
     this.subscriptions.push(
@@ -195,7 +193,7 @@ export class JobsDashboardComponent implements OnInit, OnDestroy {
             this.onModeChange(JobViewMode.myJobs);
           }
         }
-      })
+      }),
     );
 
     this.subscriptions.push(
@@ -203,7 +201,7 @@ export class JobsDashboardComponent implements OnInit, OnDestroy {
         this.router.navigate(["/user/jobs"], {
           queryParams: { args: JSON.stringify(filters) },
         });
-      })
+      }),
     );
   }
 

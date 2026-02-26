@@ -1,15 +1,20 @@
 import { jobsReducer } from "./jobs.reducer";
-import { JobInterface, Job } from "shared/sdk";
 import * as fromActions from "../actions/jobs.actions";
 import { initialJobsState } from "state-management/state/jobs.store";
+import { createMock } from "shared/MockStubs";
+import { OutputJobV3Dto } from "@scicatproject/scicat-sdk-ts-angular";
 
-const data: JobInterface = {
+const job = createMock<OutputJobV3Dto>({
   id: "testId",
   emailJobInitiator: "test@email.com",
   type: "archive",
-  datasetList: {},
-};
-const job = new Job(data);
+  creationTime: "",
+  executionTime: "",
+  jobParams: {},
+  jobStatusMessage: "",
+  datasetList: [],
+  jobResultObject: {},
+});
 
 describe("jobsReducer", () => {
   describe("on fetchJobsCompleteAction", () => {
@@ -99,7 +104,7 @@ describe("jobsReducer", () => {
     it("should set sortField filter and set skip filter to 0", () => {
       const column = "test";
       const direction = "asc";
-      const sortField = column + " " + direction;
+      const sortField = column + ":" + direction;
       const action = fromActions.sortByColumnAction({ column, direction });
       const state = jobsReducer(initialJobsState, action);
 

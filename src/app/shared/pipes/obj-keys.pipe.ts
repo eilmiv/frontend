@@ -8,7 +8,8 @@ import { Pipe, PipeTransform } from "@angular/core";
  * @implements {PipeTransform}
  */
 @Pipe({
-  name: "objKeys"
+  name: "objKeys",
+  standalone: false,
 })
 export class ObjKeysPipe implements PipeTransform {
   /**

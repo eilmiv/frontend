@@ -1,6 +1,12 @@
 import { ActivatedRoute, Router } from "@angular/router";
 
-import { MockActivatedRoute, MockStore } from "shared/MockStubs";
+import {
+  MockActivatedRoute,
+  MockStore,
+  createMock,
+  mockDataset,
+  mockSample,
+} from "shared/MockStubs";
 import { SampleDetailComponent } from "./sample-detail.component";
 import { Store, StoreModule } from "@ngrx/store";
 import {
@@ -19,7 +25,6 @@ import {
   removeAttachmentAction,
   addAttachmentAction,
 } from "state-management/actions/samples.actions";
-import { Dataset, Sample, User } from "shared/sdk";
 import { SharedScicatFrontendModule } from "shared/shared.module";
 import { DatePipe, SlicePipe } from "@angular/common";
 import { FileSizePipe } from "shared/pipes/filesize.pipe";
@@ -29,8 +34,12 @@ import { MatButtonModule } from "@angular/material/button";
 import { MatCardModule } from "@angular/material/card";
 import { MatIconModule } from "@angular/material/icon";
 import { MatTabsModule } from "@angular/material/tabs";
-import { FlexLayoutModule } from "@angular/flex-layout";
+import { FlexLayoutModule } from "@ngbracket/ngx-layout";
 import { AppConfigService } from "app-config.service";
+import {
+  DatasetClass,
+  ReturnedUserDto,
+} from "@scicatproject/scicat-sdk-ts-angular";
 
 const getConfig = () => ({
   editMetadataEnabled: true,
@@ -46,40 +55,38 @@ describe("SampleDetailComponent", () => {
   let store: MockStore;
   let dispatchSpy;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        declarations: [SampleDetailComponent],
-        imports: [
-          BrowserAnimationsModule,
-          FlexLayoutModule,
-          MatButtonModule,
-          MatCardModule,
-          MatIconModule,
-          MatTabsModule,
-          NgxJsonViewerModule,
-          SharedScicatFrontendModule,
-          StoreModule.forRoot({}),
-        ],
-        providers: [DatePipe, FileSizePipe, SlicePipe],
-      });
-      TestBed.overrideComponent(SampleDetailComponent, {
-        set: {
-          providers: [
-            {
-              provide: AppConfigService,
-              useValue: {
-                getConfig,
-              },
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      declarations: [SampleDetailComponent],
+      imports: [
+        BrowserAnimationsModule,
+        FlexLayoutModule,
+        MatButtonModule,
+        MatCardModule,
+        MatIconModule,
+        MatTabsModule,
+        NgxJsonViewerModule,
+        SharedScicatFrontendModule,
+        StoreModule.forRoot({}),
+      ],
+      providers: [DatePipe, FileSizePipe, SlicePipe],
+    });
+    TestBed.overrideComponent(SampleDetailComponent, {
+      set: {
+        providers: [
+          {
+            provide: AppConfigService,
+            useValue: {
+              getConfig,
             },
-            { provide: Router, useValue: router },
-            { provide: ActivatedRoute, useClass: MockActivatedRoute },
-          ],
-        },
-      });
-      TestBed.compileComponents();
-    })
-  );
+          },
+          { provide: Router, useValue: router },
+          { provide: ActivatedRoute, useClass: MockActivatedRoute },
+        ],
+      },
+    });
+    TestBed.compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(SampleDetailComponent);
@@ -107,7 +114,7 @@ describe("SampleDetailComponent", () => {
     });
 
     it("should return an array of data objects if there are datasets", () => {
-      const datasets = [new Dataset()];
+      const datasets = [mockDataset];
       const data = component.formatTableData(datasets);
 
       expect(data.length).toEqual(1);
@@ -118,7 +125,7 @@ describe("SampleDetailComponent", () => {
     it("should dispatch a saveCharacteristicsAction", () => {
       dispatchSpy = spyOn(store, "dispatch");
 
-      const sample = new Sample();
+      const sample = mockSample;
       sample.sampleId = "testId";
       component.sample = sample;
       const characteristics = {};
@@ -130,7 +137,7 @@ describe("SampleDetailComponent", () => {
         saveCharacteristicsAction({
           sampleId: sample.sampleId,
           characteristics,
-        })
+        }),
       );
     });
   });
@@ -139,8 +146,8 @@ describe("SampleDetailComponent", () => {
     it("should dispatch an addAttachmentAction", () => {
       dispatchSpy = spyOn(store, "dispatch");
 
-      component.user = new User();
-      component.sample = new Sample();
+      component.user = createMock<ReturnedUserDto>({});
+      component.sample = mockSample;
       const file = {
         name: "test",
         size: 100,
@@ -151,7 +158,7 @@ describe("SampleDetailComponent", () => {
 
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        addAttachmentAction({ attachment: component.attachment })
+        addAttachmentAction({ attachment: component.attachment }),
       );
     });
   });
@@ -160,7 +167,7 @@ describe("SampleDetailComponent", () => {
     it("should dispatch an updateAttachmentCaptionAction", () => {
       dispatchSpy = spyOn(store, "dispatch");
 
-      component.sample = new Sample();
+      component.sample = mockSample;
       const sampleId = "testId";
       component.sample.sampleId = sampleId;
       const event: SubmitCaptionEvent = {
@@ -175,7 +182,7 @@ describe("SampleDetailComponent", () => {
           sampleId,
           attachmentId: event.attachmentId,
           caption: event.caption,
-        })
+        }),
       );
     });
   });
@@ -184,7 +191,7 @@ describe("SampleDetailComponent", () => {
     it("should dispatch a removeAttachmentAction", () => {
       dispatchSpy = spyOn(store, "dispatch");
 
-      component.sample = new Sample();
+      component.sample = mockSample;
       const sampleId = "testId";
       component.sample.sampleId = sampleId;
       const attachmentId = "testId";
@@ -192,7 +199,7 @@ describe("SampleDetailComponent", () => {
 
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        removeAttachmentAction({ sampleId, attachmentId })
+        removeAttachmentAction({ sampleId, attachmentId }),
       );
     });
   });
@@ -201,7 +208,7 @@ describe("SampleDetailComponent", () => {
     it("should dispatch a changeDatasetsPageAction and a fetchSampleDatasetsAction", () => {
       dispatchSpy = spyOn(store, "dispatch");
 
-      const sample = new Sample();
+      const sample = mockSample;
       sample.sampleId = "testId";
       component.sample = sample;
       const event: PageChangeEvent = {
@@ -217,24 +224,24 @@ describe("SampleDetailComponent", () => {
         changeDatasetsPageAction({
           page: event.pageIndex,
           limit: event.pageSize,
-        })
+        }),
       );
       expect(dispatchSpy).toHaveBeenCalledWith(
-        fetchSampleDatasetsAction({ sampleId: sample.sampleId })
+        fetchSampleDatasetsAction({ sampleId: sample.sampleId }),
       );
     });
   });
 
   describe("#onRowClick()", () => {
     it("should navigate to a dataset", () => {
-      const dataset = new Dataset();
+      const dataset = mockDataset;
       dataset.pid = "testId";
 
-      component.onRowClick(dataset);
+      component.onRowClick(dataset as DatasetClass);
 
       expect(router.navigateByUrl).toHaveBeenCalledTimes(1);
       expect(router.navigateByUrl).toHaveBeenCalledWith(
-        "/datasets/" + dataset.pid
+        "/datasets/" + dataset.pid,
       );
     });
   });

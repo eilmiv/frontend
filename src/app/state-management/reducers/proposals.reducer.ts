@@ -13,15 +13,16 @@ const reducer = createReducer(
     (state, { proposals }): ProposalsState => ({
       ...state,
       proposals,
-    })
+    }),
   ),
 
   on(
-    fromActions.fetchCountCompleteAction,
-    (state, { count }): ProposalsState => ({
+    fromActions.fetchFacetCountsCompleteAction,
+    (state, { facetCounts, allCounts }): ProposalsState => ({
       ...state,
-      proposalsCount: count,
-    })
+      facetCounts,
+      proposalsCount: allCounts,
+    }),
   ),
 
   on(
@@ -29,125 +30,182 @@ const reducer = createReducer(
     (state, { proposal }): ProposalsState => ({
       ...state,
       currentProposal: proposal,
-    })
+    }),
+  ),
+
+  on(
+    fromActions.fetchParentProposalCompleteAction,
+    (state, { proposal }): ProposalsState => ({
+      ...state,
+      parentProposal: proposal,
+    }),
+  ),
+
+  on(
+    fromActions.clearCurrentProposalAction,
+    (state): ProposalsState => ({
+      ...state,
+      currentProposal: null,
+    }),
   ),
 
   on(
     fromActions.fetchProposalDatasetsCompleteAction,
-    (state, { datasets }): ProposalsState => ({ ...state, datasets })
+    (state, { datasets, limit, skip }): ProposalsState => ({
+      ...state,
+      datasets,
+      datasetFilters: {
+        ...state.datasetFilters,
+        skip,
+        limit,
+      },
+    }),
   ),
 
   on(
     fromActions.fetchProposalDatasetsCountCompleteAction,
-    (state, { count }): ProposalsState => ({ ...state, datasetsCount: count })
+    (state, { count }): ProposalsState => ({ ...state, datasetsCount: count }),
   ),
 
   on(
     fromActions.addAttachmentCompleteAction,
     (state, { attachment }): ProposalsState => {
       if (state.currentProposal) {
-        const attachments = state.currentProposal.attachments;
+        // TODO: Check this type here because on the proposals there are no attachements. Maybe we need to improve the backend type instead of returning ProposalClass
+        const attachments = (state.currentProposal as any).attachments;
         attachments.push(attachment);
         const currentProposal = { ...state.currentProposal, attachments };
         return { ...state, currentProposal };
       }
       return { ...state };
-    }
+    },
   ),
 
   on(
     fromActions.updateAttachmentCaptionCompleteAction,
     (state, { attachment }): ProposalsState => {
       if (state.currentProposal) {
-        const attachments = state.currentProposal.attachments.filter(
-          (existingAttachment) => existingAttachment.id !== attachment.id
+        const attachments = (state.currentProposal as any).attachments.filter(
+          (existingAttachment) => existingAttachment.id !== attachment.id,
         );
         attachments.push(attachment);
         const currentProposal = { ...state.currentProposal, attachments };
         return { ...state, currentProposal };
       }
       return { ...state };
-    }
+    },
   ),
 
   on(
     fromActions.removeAttachmentCompleteAction,
     (state, { attachmentId }): ProposalsState => {
       if (state.currentProposal) {
-        const attachments = state.currentProposal.attachments.filter(
-          (attachment) => attachment.id !== attachmentId
+        const attachments = (state.currentProposal as any).attachments.filter(
+          (attachment) => attachment.id !== attachmentId,
         );
         const currentProposal = { ...state.currentProposal, attachments };
         return { ...state, currentProposal };
       }
       return { ...state };
-    }
-  ),
-
-  on(fromActions.prefillFiltersAction, (state, { values }): ProposalsState => {
-    const proposalFilters = { ...state.proposalFilters, ...values };
-    return { ...state, proposalFilters, hasPrefilledFilters: true };
-  }),
-
-  on(fromActions.setTextFilterAction, (state, { text }): ProposalsState => {
-    const proposalFilters = { ...state.proposalFilters, text, skip: 0 };
-    return { ...state, proposalFilters };
-  }),
-  on(
-    fromActions.setDateRangeFilterAction,
-    (state, { begin, end }): ProposalsState => {
-      const dateRange = { begin, end };
-      const proposalFilters = { ...state.proposalFilters, dateRange };
-      return { ...state, proposalFilters };
-    }
-  ),
-
-  on(fromActions.clearFacetsAction, (state): ProposalsState => {
-    const limit = state.proposalFilters.limit; // Save limit
-    const proposalFilters = {
-      ...initialProposalsState.proposalFilters,
-      skip: 0,
-      limit,
-    };
-    return { ...state, proposalFilters };
-  }),
-
-  on(fromActions.changePageAction, (state, { page, limit }): ProposalsState => {
-    const skip = page * limit;
-    const proposalFilters = { ...state.proposalFilters, skip, limit };
-    return { ...state, proposalFilters };
-  }),
-  on(
-    fromActions.changeDatasetsPageAction,
-    (state, { page, limit }): ProposalsState => {
-      const skip = page * limit;
-      const datasetFilters = { ...state.datasetFilters, skip, limit };
-      return { ...state, datasetFilters };
-    }
+    },
   ),
 
   on(
-    fromActions.sortByColumnAction,
-    (state, { column, direction }): ProposalsState => {
-      const sortField = column + (direction ? ":" + direction : "");
-      const proposalFilters = { ...state.proposalFilters, sortField, skip: 0 };
-      return { ...state, proposalFilters };
-    }
+    fromActions.clearProposalsStateAction,
+    (): ProposalsState => ({
+      ...initialProposalsState,
+    }),
   ),
 
-  on(fromActions.clearProposalsStateAction, () => ({
-    ...initialProposalsState,
+  on(
+    fromActions.clearCurrentProposalStateAction,
+    (state): ProposalsState => ({
+      ...state,
+      currentProposal: undefined,
+    }),
+  ),
+
+  on(
+    fromActions.fetchRelatedProposalsCompleteAction,
+    (state, { relatedProposals }): ProposalsState => ({
+      ...state,
+      relatedProposals,
+    }),
+  ),
+
+  on(
+    fromActions.fetchRelatedProposalsCountCompleteAction,
+    (state, { count }): ProposalsState => ({
+      ...state,
+      relatedProposalsCount: count,
+    }),
+  ),
+
+  on(
+    fromActions.clearProposalsFiltersAction,
+    (state): ProposalsState => ({
+      ...state,
+      proposalFilters: {
+        ...state.proposalFilters,
+        fields: { text: state.proposalFilters.fields.text },
+      },
+    }),
+  ),
+
+  on(fromActions.setInitialProposalsFiltersAction, (state, { fields }) => ({
+    ...state,
+    proposalFilters: { ...state.proposalFilters, fields },
   })),
 
-  on(fromActions.clearCurrentProposalStateAction, (state) => ({
-    ...state,
-    currentProposal: undefined
-  }))
+  on(
+    fromActions.addProposalFilterAction,
+    (state, { key, value, filterType }): ProposalsState => {
+      const filters = {
+        ...state.proposalFilters.fields,
+      };
+      if (filterType === "multiSelect") {
+        const newValue = (state.proposalFilters.fields[key] || [])
+          .concat(value)
+          .filter((val, i, self) => self.indexOf(val) === i); // Unique
+
+        filters[key] = newValue;
+      } else {
+        filters[key] = value;
+      }
+
+      return {
+        ...state,
+        proposalFilters: { ...state.proposalFilters, fields: filters },
+      };
+    },
+  ),
+
+  on(
+    fromActions.removeProposalFilterAction,
+    (state, { key, value, filterType }): ProposalsState => {
+      const filters = { ...state.proposalFilters.fields };
+
+      if (filterType === "multiSelect") {
+        const newValue = state.proposalFilters.fields[key].filter(
+          (existingValue) => existingValue !== value,
+        );
+
+        filters[key] = newValue;
+      } else {
+        delete filters[key];
+      }
+
+      return {
+        ...state,
+        proposalFilters: { ...state.proposalFilters, fields: filters },
+      };
+    },
+  ),
 );
 
 export const proposalsReducer = (
   state: ProposalsState | undefined,
-  action: Action
+  action: Action,
 ) => {
   if (action.type.indexOf("[Proposal]") !== -1) {
     console.log("Action came in! " + action.type);

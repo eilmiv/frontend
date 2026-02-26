@@ -1,13 +1,39 @@
-import { Settings, Message, User, TableColumn } from "../models";
-import { AccessToken } from "shared/sdk";
+import { Settings, Message, TableColumn, ScientificCondition } from "../models";
+import { AccessTokenInterface } from "shared/services/auth/auth.service";
+import { ReturnedUserDto } from "@scicatproject/scicat-sdk-ts-angular";
+import { Observable } from "rxjs";
+import { FacetCount } from "./datasets.store";
+
+export type FilterType =
+  | "text"
+  | "dateRange"
+  | "multiSelect"
+  | "number"
+  | "checkbox";
+
+export interface FilterConfig {
+  key: string;
+  label?: string;
+  description?: string;
+  type?: FilterType;
+  enabled: boolean;
+  facetCounts$?: Observable<FacetCount[]>;
+  filter$?: Observable<string[]>;
+}
+
+export interface ConditionConfig {
+  condition: ScientificCondition;
+  enabled: boolean;
+  conditionType?: "datasets" | "samples";
+}
 
 // NOTE It IS ok to make up a state of other sub states
 export interface UserState {
-  currentUser: User | undefined;
+  currentUser: ReturnedUserDto | undefined;
   accountType?: string;
   profile?: any;
 
-  scicatToken: AccessToken;
+  scicatToken: AccessTokenInterface;
 
   settings: Settings;
 
@@ -16,9 +42,17 @@ export interface UserState {
   isLoggingIn: boolean;
   isLoggedIn: boolean;
 
+  hasFetchedSettings: boolean;
+
   isLoading: boolean;
 
   columns: TableColumn[];
+
+  tablesSettings: object;
+
+  filters: FilterConfig[];
+
+  conditions: ConditionConfig[];
 }
 
 export const initialUserState: UserState = {
@@ -29,9 +63,9 @@ export const initialUserState: UserState = {
     id: "",
     ttl: 0,
     scopes: ["string"],
-    created: new Date(),
+    created: new Date().toISOString(),
     userId: "",
-    user: {},
+    user: { id: "", username: "", email: "", authStrategy: "" },
   },
 
   settings: {
@@ -48,5 +82,56 @@ export const initialUserState: UserState = {
 
   isLoading: false,
 
+  hasFetchedSettings: false,
+
   columns: [],
+
+  filters: [
+    {
+      key: "creationLocation",
+      label: "Location",
+      type: "multiSelect",
+      description: "Filter by creation location on the dataset",
+      enabled: true,
+    },
+    {
+      key: "pid",
+      label: "Pid",
+      type: "text",
+      description: "Filter by dataset pid",
+      enabled: true,
+    },
+    {
+      key: "ownerGroup",
+      label: "Group",
+      type: "multiSelect",
+      description: "Filter by owner group of the dataset",
+      enabled: true,
+    },
+    {
+      key: "type",
+      label: "Type",
+      type: "multiSelect",
+      description: "Filter by dataset type",
+      enabled: true,
+    },
+    {
+      key: "keywords",
+      label: "Keyword",
+      type: "multiSelect",
+      description: "Filter by keywords in the dataset",
+      enabled: true,
+    },
+    {
+      key: "creationTime",
+      label: "Creation Time",
+      type: "dateRange",
+      description: "Filter by creation time of the dataset",
+      enabled: true,
+    },
+  ],
+
+  conditions: [],
+
+  tablesSettings: {},
 };

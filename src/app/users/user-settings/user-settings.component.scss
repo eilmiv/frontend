@@ -6,12 +6,29 @@ mat-card {
   }
 
   .section-icon {
+    padding-right: 0.4em;
     height: auto !important;
     width: auto !important;
   }
 
   .profile-image {
     margin: 1em 0em;
+  }
+
+  .token-truncate {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
+    max-width: 10em;
+  }
+
+  .config-button {
+    margin-top: 1em;
+  }
+
+  .empty-state {
+    opacity: 0.5;
   }
 
   table {
@@ -22,9 +39,9 @@ mat-card {
     }
 
     td {
-      width: 100%;
       padding: 0.5em;
-      display: inline-block;
+      display: flex;
+      align-items: center;
       word-break: break-all;
 
       .copy-button {
@@ -32,6 +49,14 @@ mat-card {
       }
 
       .copy-button:hover {
+        cursor: pointer;
+      }
+
+      .toggleButton {
+        margin: 0 1em;
+      }
+
+      .toggleButton:hover {
         cursor: pointer;
       }
     }

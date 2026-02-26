@@ -1,2 +1,21 @@
-<shared-table [dataSource]="dataSource" [columnsdef]="columns" [pageSize]="5" (rowClick)="onRowClick($event)">
-</shared-table>
+<dynamic-mat-table
+  [tableName]="tableName"
+  [columns]="columns"
+  [pending]="pending"
+  [setting]="setting"
+  [pagingMode]="paginationMode"
+  [dataSource]="dataSource"
+  [pagination]="pagination"
+  [rowSelectionMode]="rowSelectionMode"
+  [globalTextSearch]="globalTextSearch"
+  globalTextSearchPlaceholder="Global text search"
+  (paginationChange)="onPaginationChange($event)"
+  (globalTextSearchChange)="onGlobalTextSearchChange($event)"
+  (onRowEvent)="onRowClick($event)"
+  (settingChange)="onSettingChange($event)"
+  (onTableEvent)="onTableEvent($event)"
+  class="mat-elevation-z2"
+  [emptyMessage]="'No files available'"
+  [emptyIcon]="'description'"
+>
+</dynamic-mat-table>

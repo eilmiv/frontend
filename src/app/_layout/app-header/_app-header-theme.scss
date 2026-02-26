@@ -1,19 +1,29 @@
-@use "sass:map";
 @use "@angular/material" as mat;
+@use "sass:map";
 
 @mixin color($theme) {
-  $color-config: mat.get-color-config($theme);
+  $color-config: map.get($theme, "color");
   $primary: map.get($color-config, "primary");
 
   .header {
-    a {
-      color: mat.get-color-from-palette($primary, "default-contrast");
+    mat-toolbar {
+      background-color: mat.m2-get-color-from-palette(
+        $primary,
+        "default-contrast"
+      );
+      border-bottom: 2px solid
+        mat.m2-get-color-from-palette($primary, "default");
+    }
+    a,
+    h3,
+    div {
+      color: mat.m2-get-color-from-palette($primary, "default");
     }
   }
 }
 
 @mixin theme($theme) {
-  $color-config: mat.get-color-config($theme);
+  $color-config: mat.m2-get-color-config($theme);
   @if $color-config != null {
     @include color($theme);
   }

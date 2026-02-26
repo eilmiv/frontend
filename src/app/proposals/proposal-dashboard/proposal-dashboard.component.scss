@@ -1,0 +1,33 @@
+mat-sidenav-container {
+  mat-sidenav-content {
+    padding: 0 0 0.5rem 0.5rem;
+    background-color: #ffffff;
+    overflow-x: hidden;
+
+    .action-column {
+      .add-card {
+        margin: 1rem 0 1rem;
+        text-align: center;
+
+        mat-icon {
+          vertical-align: middle;
+        }
+      }
+
+      .add-card:hover {
+        cursor: pointer;
+        background-color: rgba(0, 0, 0, 0.1);
+      }
+    }
+
+    .table-column {
+      min-width: 0;
+      overflow: visible;
+    }
+  }
+
+  mat-sidenav.mat-drawer-opened,
+  mat-sidenav.mat-drawer-opening {
+    box-shadow: 0 0 0 0 !important;
+  }
+}

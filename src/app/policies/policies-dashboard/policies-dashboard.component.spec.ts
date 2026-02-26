@@ -8,8 +8,7 @@ import {
 import { PoliciesDashboardComponent } from "./policies-dashboard.component";
 import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { SharedScicatFrontendModule } from "shared/shared.module";
-import { DatasetApi, Policy } from "shared/sdk";
-import { MockDatasetApi, MockStore } from "shared/MockStubs";
+import { MockDatasetApi, MockStore, mockPolicy } from "shared/MockStubs";
 import { StoreModule, Store } from "@ngrx/store";
 import {
   PageChangeEvent,
@@ -28,7 +27,7 @@ import {
   sortEditableByColumnAction,
 } from "state-management/actions/policies.actions";
 
-import { Router } from "@angular/router";
+import { provideRouter, Router } from "@angular/router";
 import { GenericFilters } from "state-management/models";
 
 import { RouterTestingModule } from "@angular/router/testing";
@@ -42,8 +41,9 @@ import {
 import { MatCheckboxChange } from "@angular/material/checkbox";
 import { MatButtonModule } from "@angular/material/button";
 import { MatIconModule } from "@angular/material/icon";
-import { FlexLayoutModule } from "@angular/flex-layout";
+import { FlexLayoutModule } from "@ngbracket/ngx-layout";
 import { BrowserAnimationsModule } from "@angular/platform-browser/animations";
+import { DatasetsService } from "@scicatproject/scicat-sdk-ts-angular";
 
 describe("PoliciesDashboardComponent", () => {
   let component: PoliciesDashboardComponent;
@@ -55,55 +55,53 @@ describe("PoliciesDashboardComponent", () => {
   let store: MockStore;
   let dispatchSpy;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        schemas: [NO_ERRORS_SCHEMA],
-        declarations: [PoliciesDashboardComponent],
-        imports: [
-          BrowserAnimationsModule,
-          FlexLayoutModule,
-          MatButtonModule,
-          MatIconModule,
-          MatTabsModule,
-          RouterTestingModule.withRoutes([]),
-          SharedScicatFrontendModule,
-          StoreModule.forRoot({}),
-        ],
-        providers: [
-          provideMockStore({
-            selectors: [
-              {
-                selector: selectPoliciesDashboardPageViewModel,
-                value: {
-                  policies: [],
-                  policiesPerPage: 25,
-                  currentPage: 0,
-                  policyCount: 0,
-                  filters: {},
-                  editablePolicies: [],
-                  editablePoliciesPerPage: 25,
-                  currentEditablePage: 0,
-                  editableCount: 0,
-                  editableFilters: {},
-                  selectedPolicies: [],
-                },
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      schemas: [NO_ERRORS_SCHEMA],
+      declarations: [PoliciesDashboardComponent],
+      imports: [
+        BrowserAnimationsModule,
+        FlexLayoutModule,
+        MatButtonModule,
+        MatIconModule,
+        MatTabsModule,
+        SharedScicatFrontendModule,
+        StoreModule.forRoot({}),
+      ],
+      providers: [
+        provideRouter([]),
+        provideMockStore({
+          selectors: [
+            {
+              selector: selectPoliciesDashboardPageViewModel,
+              value: {
+                policies: [],
+                policiesPerPage: 25,
+                currentPage: 0,
+                policyCount: 0,
+                filters: {},
+                editablePolicies: [],
+                editablePoliciesPerPage: 25,
+                currentEditablePage: 0,
+                editableCount: 0,
+                editableFilters: {},
+                selectedPolicies: [],
               },
-            ],
-          }),
-        ],
-      });
-      TestBed.overrideComponent(PoliciesDashboardComponent, {
-        set: {
-          providers: [
-            { provide: DatasetApi, useClass: MockDatasetApi },
-            { provide: Router, useValue: router },
+            },
           ],
-        },
-      });
-      TestBed.compileComponents();
-    })
-  );
+        }),
+      ],
+    });
+    TestBed.overrideComponent(PoliciesDashboardComponent, {
+      set: {
+        providers: [
+          { provide: DatasetsService, useClass: MockDatasetApi },
+          { provide: Router, useValue: router },
+        ],
+      },
+    });
+    TestBed.compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(PoliciesDashboardComponent);
@@ -198,7 +196,7 @@ describe("PoliciesDashboardComponent", () => {
 
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        changePageAction({ page: event.pageIndex, limit: event.pageSize })
+        changePageAction({ page: event.pageIndex, limit: event.pageSize }),
       );
     });
   });
@@ -219,7 +217,7 @@ describe("PoliciesDashboardComponent", () => {
         changeEditablePageAction({
           page: event.pageIndex,
           limit: event.pageSize,
-        })
+        }),
       );
     });
   });
@@ -236,7 +234,10 @@ describe("PoliciesDashboardComponent", () => {
 
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        sortByColumnAction({ column: event.active, direction: event.direction })
+        sortByColumnAction({
+          column: event.active,
+          direction: event.direction,
+        }),
       );
     });
   });
@@ -256,7 +257,7 @@ describe("PoliciesDashboardComponent", () => {
         sortEditableByColumnAction({
           column: event.active,
           direction: event.direction,
-        })
+        }),
       );
     });
   });
@@ -291,14 +292,14 @@ describe("PoliciesDashboardComponent", () => {
 
       const checkboxEvent: CheckboxEvent = {
         event: new MatCheckboxChange(),
-        row: new Policy(),
+        row: mockPolicy,
       };
       checkboxEvent.event.checked = true;
       component.onSelectOne(checkboxEvent);
 
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        selectPolicyAction({ policy: checkboxEvent.row })
+        selectPolicyAction({ policy: checkboxEvent.row }),
       );
     });
 
@@ -307,22 +308,22 @@ describe("PoliciesDashboardComponent", () => {
 
       const checkboxEvent: CheckboxEvent = {
         event: new MatCheckboxChange(),
-        row: new Policy(),
+        row: mockPolicy,
       };
       checkboxEvent.event.checked = false;
       component.onSelectOne(checkboxEvent);
 
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        deselectPolicyAction({ policy: checkboxEvent.row })
+        deselectPolicyAction({ policy: checkboxEvent.row }),
       );
     });
   });
-
+  /*
   describe("#openDialog()", () => {
     xit("should...", () => {});
   });
-
+*/
   describe("#onDialogClose()", () => {
     it("should do nothing if there is no result", () => {
       dispatchSpy = spyOn(store, "dispatch");
@@ -335,7 +336,7 @@ describe("PoliciesDashboardComponent", () => {
     it("should dispatch a submitPolicyAction and a clearSelectionAction if there is a result", () => {
       dispatchSpy = spyOn(store, "dispatch");
 
-      const result = new Policy();
+      const result = mockPolicy;
       component.selectedGroups = ["test"];
       component.onDialogClose(result);
 
@@ -344,7 +345,7 @@ describe("PoliciesDashboardComponent", () => {
         submitPolicyAction({
           ownerList: component.selectedGroups,
           policy: result,
-        })
+        }),
       );
       expect(dispatchSpy).toHaveBeenCalledWith(clearSelectionAction());
     });

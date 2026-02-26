@@ -1,10 +1,10 @@
 import { Component, OnDestroy, OnInit, ViewChild } from "@angular/core";
-import { ActivatedRoute, Router } from "@angular/router";
+import { ActivatedRoute, NavigationStart, Router } from "@angular/router";
 import { Store, ActionsSubject } from "@ngrx/store";
 
 import deepEqual from "deep-equal";
 
-import { DatasetFilters, User } from "state-management/models";
+import { DatasetFilters } from "state-management/models";
 
 import {
   fetchDatasetsAction,
@@ -14,70 +14,67 @@ import {
   addDatasetAction,
   fetchDatasetCompleteAction,
   fetchMetadataKeysAction,
+  changePageAction,
+  clearBatchAction,
+  setSearchTermsAction,
+  setTextFilterAction,
 } from "state-management/actions/datasets.actions";
 
 import {
-  selectFilters,
   selectHasPrefilledFilters,
-  selectDatasetsInBatch,
   selectCurrentDataset,
   selectSelectedDatasets,
+  selectPagination,
+  selectIsBatchNonEmpty,
 } from "state-management/selectors/datasets.selectors";
 import { distinctUntilChanged, filter, map, take } from "rxjs/operators";
 import { MatDialog } from "@angular/material/dialog";
 import { MatSidenav } from "@angular/material/sidenav";
 import { AddDatasetDialogComponent } from "datasets/add-dataset-dialog/add-dataset-dialog.component";
-import { combineLatest, Subscription } from "rxjs";
+import { combineLatest, Subscription, lastValueFrom } from "rxjs";
 import {
   selectProfile,
   selectCurrentUser,
   selectColumns,
   selectIsLoggedIn,
+  selectHasFetchedSettings,
 } from "state-management/selectors/user.selectors";
-import { Dataset, DerivedDataset } from "shared/sdk";
 import {
-  selectColumnAction,
-  deselectColumnAction,
-  setDatasetTableColumnsAction,
-} from "state-management/actions/user.actions";
-import { SelectColumnEvent } from "datasets/dataset-table-settings/dataset-table-settings.component";
+  OutputDatasetObsoleteDto,
+  ReturnedUserDto,
+} from "@scicatproject/scicat-sdk-ts-angular";
+import { loadDefaultSettings } from "state-management/actions/user.actions";
 import { AppConfigService } from "app-config.service";
+import { IngestorCreationComponent } from "ingestor/ingestor-page/ingestor-creation.component";
 
 @Component({
   selector: "dashboard",
   templateUrl: "dashboard.component.html",
   styleUrls: ["dashboard.component.scss"],
+  standalone: false,
 })
 export class DashboardComponent implements OnInit, OnDestroy {
-  private filters$ = this.store.select(selectFilters);
+  private pagination$ = this.store.select(selectPagination);
   private readyToFetch$ = this.store
     .select(selectHasPrefilledFilters)
     .pipe(filter((has) => has));
   loggedIn$ = this.store.select(selectIsLoggedIn);
   selectedSets$ = this.store.select(selectSelectedDatasets);
-  tableColumns$ = this.store
-    .select(selectColumns)
-    .pipe(
-      map((columns) => columns.filter((column) => column.name !== "select"))
-    );
-  selectableColumns$ = this.store
-    .select(selectColumns)
-    .pipe(
-      map((columns) => columns.filter((column) => column.name !== "select"))
-    );
-  public nonEmpty$ = this.store
-    .select(selectDatasetsInBatch)
-    .pipe(map((batch) => batch.length > 0));
+  selectColumns$ = this.store.select(selectColumns);
+  selectHasFetchedSettings$ = this.store.select(selectHasFetchedSettings);
+
+  public nonEmpty$ = this.store.select(selectIsBatchNonEmpty);
 
   subscriptions: Subscription[] = [];
 
   appConfig = this.appConfigService.getConfig();
 
-  currentUser: User = new User();
+  currentUser: ReturnedUserDto;
   userGroups: string[] = [];
   clearColumnSearch = false;
 
   @ViewChild(MatSidenav, { static: false }) sideNav!: MatSidenav;
+  @ViewChild("ingestor") ingestor: IngestorCreationComponent;
 
   constructor(
     public appConfigService: AppConfigService,
@@ -85,118 +82,76 @@ export class DashboardComponent implements OnInit, OnDestroy {
     public dialog: MatDialog,
     private store: Store,
     private router: Router,
-    private route: ActivatedRoute
+    private route: ActivatedRoute,
   ) {}
 
-  onSettingsClick(): void {
-    this.sideNav.toggle();
-    if (this.sideNav.opened) {
-      this.clearColumnSearch = false;
-    } else {
-      this.clearColumnSearch = true;
-    }
+  onTextChange(term: string) {
+    this.store.dispatch(setSearchTermsAction({ terms: term }));
+    this.store.dispatch(setTextFilterAction({ text: term }));
   }
 
-  onCloseClick(): void {
-    this.clearColumnSearch = true;
-    this.sideNav.close();
+  onSearchAction() {
+    this.store.dispatch(fetchDatasetsAction());
+    this.store.dispatch(fetchFacetCountsAction());
   }
 
-  onSelectColumn(event: SelectColumnEvent): void {
-    const { checkBoxChange, column } = event;
-    if (checkBoxChange.checked) {
-      this.store.dispatch(
-        selectColumnAction({ name: column.name, columnType: column.type })
-      );
-    } else if (!checkBoxChange.checked) {
-      this.store.dispatch(
-        deselectColumnAction({ name: column.name, columnType: column.type })
-      );
-    }
+  onPageChange(event: { pageIndex: number; pageSize: number }) {
+    this.store.dispatch(
+      changePageAction({ page: event.pageIndex, limit: event.pageSize }),
+    );
   }
 
-  onRowClick(dataset: Dataset): void {
+  onRowClick(dataset: OutputDatasetObsoleteDto): void {
     const pid = encodeURIComponent(dataset.pid);
     this.router.navigateByUrl("/datasets/" + pid);
   }
 
   openDialog(): void {
-    const dialogRef = this.dialog.open(AddDatasetDialogComponent, {
-      width: "500px",
-      data: { userGroups: this.userGroups },
-    });
-
-    dialogRef.afterClosed().subscribe((res) => {
-      if (res) {
-        const { username, email } = this.currentUser;
-        const dataset = new DerivedDataset({
-          accessGroups: [],
-          contactEmail: email, // Required
-          createdBy: username,
-          creationTime: new Date(), // Required
-          datasetName: res.datasetName,
-          description: res.description,
-          isPublished: false,
-          keywords: [],
-          owner: username.replace("ldap.", ""), // Required
-          ownerEmail: email,
-          ownerGroup: res.ownerGroup, // Required
-          packedSize: 0,
-          size: 0,
-          sourceFolder: res.sourceFolder, // Required
-          type: "derived", // Required
-          inputDatasets: [], // Required
-          investigator: email, // Required
-          scientificMetadata: {},
-          usedSoftware: res.usedSoftware
-            .split(",")
-            .map((entry: string) => entry.trim())
-            .filter((entry: string) => entry !== ""), // Required
-        });
-        this.store.dispatch(addDatasetAction({ dataset }));
-      }
-    });
-  }
-
-  updateColumnSubscription(): void {
-    this.subscriptions.push(
-      this.loggedIn$.subscribe((status) => {
-        if (!status) {
-          const columns = this.appConfig.localColumns;
-          this.store.dispatch(setDatasetTableColumnsAction({columns}));
-          this.tableColumns$ = this.store
-            .select(selectColumns)
-            .pipe(
-              map((columns) =>
-                columns.filter((column) => column.name !== "select")
-              )
-            );
-        } else {
-          this.tableColumns$ = this.store.select(selectColumns);
-        }
-      })
-    );
+    if (this.ingestor) {
+      this.ingestor.onClickAddIngestion();
+    }
   }
 
   ngOnInit() {
     this.store.dispatch(prefillBatchAction());
     this.store.dispatch(fetchMetadataKeysAction());
 
-    this.updateColumnSubscription();
-
     this.subscriptions.push(
-      combineLatest([this.filters$, this.readyToFetch$, this.loggedIn$])
+      combineLatest([
+        this.pagination$,
+        this.readyToFetch$,
+        this.loggedIn$,
+        this.selectHasFetchedSettings$,
+      ])
         .pipe(
-          map(([filters, _, loggedIn]) => [filters, loggedIn]),
-          distinctUntilChanged(deepEqual)
+          map(([pagination, , loggedIn, hasFetchedSettings]) => [
+            pagination,
+            loggedIn,
+            hasFetchedSettings,
+          ]),
+          distinctUntilChanged(deepEqual),
         )
-        .subscribe((obj) => {
+        .subscribe(async ([pagination, loggedIn]) => {
+          const hasFetchedSettings = await lastValueFrom(
+            this.selectHasFetchedSettings$.pipe(take(1)),
+          );
+
+          if (!hasFetchedSettings) {
+            return;
+          }
+
           this.store.dispatch(fetchDatasetsAction());
           this.store.dispatch(fetchFacetCountsAction());
-          this.router.navigate(["/datasets"], {
-            queryParams: { args: JSON.stringify(obj[0]) },
+          this.router.navigate([this.router.url.split("?")[0]], {
+            queryParams: { args: JSON.stringify(pagination) },
+            queryParamsHandling: "merge",
           });
-        })
+          if (!loggedIn) {
+            this.store.dispatch(
+              loadDefaultSettings({ config: this.appConfig }),
+            );
+          }
+        }),
     );
 
     this.subscriptions.push(
@@ -204,11 +159,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
         .pipe(
           map((params) => params.args as string),
           take(1),
-          map((args) => (args ? (JSON.parse(args) as DatasetFilters) : {}))
+          map((args) => (args ? (JSON.parse(args) as DatasetFilters) : {})),
         )
         .subscribe((filters) =>
-          this.store.dispatch(prefillFiltersAction({ values: filters }))
-        )
+          this.store.dispatch(prefillFiltersAction({ values: filters })),
+        ),
     );
 
     this.subscriptions.push(
@@ -216,7 +171,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         if (user) {
           this.currentUser = user;
         }
-      })
+      }),
     );
 
     this.subscriptions.push(
@@ -224,7 +179,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         if (profile) {
           this.userGroups = profile.accessGroups;
         }
-      })
+      }),
     );
 
     this.subscriptions.push(
@@ -240,8 +195,39 @@ export class DashboardComponent implements OnInit, OnDestroy {
             })
             .unsubscribe();
         }
-      })
+      }),
     );
+
+    this.subscriptions.push(
+      this.router.events.subscribe((event) => {
+        const currentUrl = this.router.url.split("?")[0];
+        if (
+          event instanceof NavigationStart &&
+          event.url !== currentUrl + "/edit" &&
+          !this.fullyDecodeURI(event.url).startsWith(
+            this.fullyDecodeURI(currentUrl),
+          )
+        ) {
+          localStorage.removeItem("editingPublishedDataDoi");
+          localStorage.removeItem("editingDatasetList");
+          this.store.dispatch(clearBatchAction());
+        }
+      }),
+    );
+  }
+
+  isEncoded(uri: string | undefined): boolean {
+    uri = uri || "";
+
+    return uri !== decodeURIComponent(uri);
+  }
+
+  fullyDecodeURI(uri: string | undefined): string {
+    while (this.isEncoded(uri)) {
+      uri = decodeURIComponent(uri);
+    }
+
+    return uri;
   }
 
   ngOnDestroy() {

@@ -6,10 +6,9 @@ import {
 } from "@angular/core/testing";
 
 import { JobsDashboardComponent } from "./jobs-dashboard.component";
-import { MockStore } from "shared/MockStubs";
+import { MockStore, createMock, mockJob } from "shared/MockStubs";
 import { Router } from "@angular/router";
 import { Store, StoreModule } from "@ngrx/store";
-import { Job } from "shared/sdk";
 import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { SharedScicatFrontendModule } from "shared/shared.module";
 import { DatePipe } from "@angular/common";
@@ -20,9 +19,11 @@ import {
 } from "state-management/actions/jobs.actions";
 import { PageChangeEvent } from "shared/modules/table/table.component";
 import { MatButtonToggleModule } from "@angular/material/button-toggle";
-import { FlexLayoutModule } from "@angular/flex-layout";
+import { FlexLayoutModule } from "@ngbracket/ngx-layout";
 import { MatCardModule } from "@angular/material/card";
 import { MatIconModule } from "@angular/material/icon";
+import { BrowserAnimationsModule } from "@angular/platform-browser/animations";
+import { OutputJobV3Dto } from "@scicatproject/scicat-sdk-ts-angular";
 
 describe("JobsDashboardComponent", () => {
   let component: JobsDashboardComponent;
@@ -34,29 +35,28 @@ describe("JobsDashboardComponent", () => {
   let store: MockStore;
   let dispatchSpy;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        schemas: [NO_ERRORS_SCHEMA],
-        declarations: [JobsDashboardComponent],
-        imports: [
-          FlexLayoutModule,
-          MatButtonToggleModule,
-          MatCardModule,
-          MatIconModule,
-          SharedScicatFrontendModule,
-          StoreModule.forRoot({}),
-        ],
-        providers: [DatePipe],
-      });
-      TestBed.overrideComponent(JobsDashboardComponent, {
-        set: {
-          providers: [{ provide: Router, useValue: router }],
-        },
-      });
-      TestBed.compileComponents();
-    })
-  );
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      schemas: [NO_ERRORS_SCHEMA],
+      declarations: [JobsDashboardComponent],
+      imports: [
+        FlexLayoutModule,
+        MatButtonToggleModule,
+        MatCardModule,
+        MatIconModule,
+        SharedScicatFrontendModule,
+        BrowserAnimationsModule,
+        StoreModule.forRoot({}),
+      ],
+      providers: [DatePipe],
+    });
+    TestBed.overrideComponent(JobsDashboardComponent, {
+      set: {
+        providers: [{ provide: Router, useValue: router }],
+      },
+    });
+    TestBed.compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(JobsDashboardComponent);
@@ -84,7 +84,7 @@ describe("JobsDashboardComponent", () => {
     });
 
     it("should return an array of data object jobs are defined", () => {
-      const jobs = [new Job()];
+      const jobs = [mockJob];
 
       const data = component.formatTableData(jobs);
 
@@ -106,7 +106,7 @@ describe("JobsDashboardComponent", () => {
 
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        setJobViewModeAction({ mode: viewMode })
+        setJobViewModeAction({ mode: viewMode }),
       );
     });
 
@@ -119,7 +119,7 @@ describe("JobsDashboardComponent", () => {
 
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        setJobViewModeAction({ mode: viewMode })
+        setJobViewModeAction({ mode: viewMode }),
       );
     });
   });
@@ -137,20 +137,24 @@ describe("JobsDashboardComponent", () => {
 
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        changePageAction({ page: event.pageIndex, limit: event.pageSize })
+        changePageAction({ page: event.pageIndex, limit: event.pageSize }),
       );
     });
   });
 
   describe("#onRowClick()", () => {
     it("should navigate to a job", () => {
-      const job = new Job();
-      job.id = "test";
-      component.onRowClick(job);
+      const job = createMock<OutputJobV3Dto>({ id: "test" });
+      component.onRowClick({
+        ...job,
+        initiator: "",
+        statusMessage: "",
+        createdAt: "",
+      });
 
       expect(router.navigateByUrl).toHaveBeenCalledTimes(1);
       expect(router.navigateByUrl).toHaveBeenCalledWith(
-        "/user/jobs/" + encodeURIComponent(job.id)
+        "/user/jobs/" + encodeURIComponent(job.id),
       );
     });
   });

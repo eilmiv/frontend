@@ -6,7 +6,10 @@ import {
   AfterViewChecked,
 } from "@angular/core";
 import { Store } from "@ngrx/store";
-import { Dataset } from "shared/sdk";
+import {
+  Logbook,
+  OutputDatasetObsoleteDto,
+} from "@scicatproject/scicat-sdk-ts-angular";
 import { combineLatest, Subscription } from "rxjs";
 import { selectLogbooksDashboardPageViewModel } from "state-management/selectors/logbooks.selectors";
 import {
@@ -31,15 +34,25 @@ import { AppConfigService } from "app-config.service";
 import { selectCurrentDataset } from "state-management/selectors/datasets.selectors";
 import { OwnershipService } from "shared/services/ownership.service";
 
+export interface LogbookData {
+  logbook: Logbook;
+  entriesCount: number;
+  entriesPerPage: number;
+  currentPage: number;
+  filters: LogbookFilters;
+}
 @Component({
   selector: "app-logbooks-dashboard",
   templateUrl: "./logbooks-dashboard.component.html",
   styleUrls: ["./logbooks-dashboard.component.scss"],
+  standalone: false,
 })
 export class LogbooksDashboardComponent
-  implements OnInit, OnDestroy, AfterViewChecked {
+  implements OnInit, OnDestroy, AfterViewChecked
+{
   vm$ = this.store.select(selectLogbooksDashboardPageViewModel);
-  dataset: Dataset | undefined = undefined;
+
+  dataset: OutputDatasetObsoleteDto | undefined = undefined;
   appConfig = this.appConfigService.getConfig();
 
   subscriptions: Subscription[] = [];
@@ -50,25 +63,33 @@ export class LogbooksDashboardComponent
     private route: ActivatedRoute,
     private router: Router,
     private store: Store,
-    private ownershipService: OwnershipService
-  ) { }
+    private ownershipService: OwnershipService,
+  ) {}
 
   applyRouterState(pid: string, filters: LogbookFilters) {
     console.log("Rerouting to Dataset Logbook");
+
     this.router.navigate(["/datasets", pid, "logbook"], {
       queryParams: { args: JSON.stringify(filters) },
     });
   }
 
   onTextSearchChange(pid: string, query: string) {
-    this.store.dispatch(setTextFilterAction({ textSearch: query }));
+    // TODO: query.length return undefined when it is empty
+    const queryText = query.length ? query : "";
+    this.store.dispatch(setTextFilterAction({ textSearch: queryText }));
     this.store.dispatch(fetchDatasetLogbookAction({ pid }));
   }
 
   onFilterSelect(pid: string, filters: LogbookFilters) {
     const { showBotMessages, showImages, showUserMessages } = filters;
+
     this.store.dispatch(
-      setDisplayFiltersAction({ showBotMessages, showImages, showUserMessages })
+      setDisplayFiltersAction({
+        showBotMessages,
+        showImages,
+        showUserMessages,
+      }),
     );
     this.store.dispatch(fetchDatasetLogbookAction({ pid }));
     this.applyRouterState(pid, filters);
@@ -76,7 +97,7 @@ export class LogbooksDashboardComponent
 
   onPageChange(pid: string, event: PageChangeEvent) {
     this.store.dispatch(
-      changePageAction({ page: event.pageIndex, limit: event.pageSize })
+      changePageAction({ page: event.pageIndex, limit: event.pageSize }),
     );
     this.store.dispatch(fetchDatasetLogbookAction({ pid }));
   }
@@ -88,38 +109,41 @@ export class LogbooksDashboardComponent
   }
 
   ngOnInit() {
-  
     this.subscriptions.push(
       combineLatest([this.route.params, this.vm$])
         .pipe(
           map(([params, vm]) => [params, vm.filters]),
-          distinctUntilChanged(deepEqual)
+          distinctUntilChanged(deepEqual),
         )
         .subscribe(([{ pid }, filters]) => {
           if (pid) {
-            this.store.dispatch(fetchDatasetLogbookAction({ pid }));
             this.applyRouterState(pid, filters as LogbookFilters);
           }
-        })
+        }),
     );
     this.subscriptions.push(
       this.store.select(selectCurrentDataset).subscribe((dataset) => {
         if (dataset) {
           this.dataset = dataset;
-          this.ownershipService.checkDatasetAccess(dataset, this.store, this.router);
+          this.store.dispatch(fetchDatasetLogbookAction({ pid: dataset.pid }));
+          this.ownershipService.checkDatasetAccess(
+            dataset,
+            this.store,
+            this.router,
+          );
         }
-      })
+      }),
     );
     this.subscriptions.push(
       this.route.queryParams
         .pipe(
           map((params) => params.args as string),
           take(1),
-          map((args) => (args ? (JSON.parse(args) as LogbookFilters) : {}))
+          map((args) => (args ? (JSON.parse(args) as LogbookFilters) : {})),
         )
         .subscribe((filters) =>
-          this.store.dispatch(prefillFiltersAction({ values: filters }))
-        )
+          this.store.dispatch(prefillFiltersAction({ values: filters })),
+        ),
     );
   }
 

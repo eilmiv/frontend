@@ -4,7 +4,6 @@ import { Router } from "@angular/router";
 import { Store } from "@ngrx/store";
 import { provideMockStore } from "@ngrx/store/testing";
 import { PageChangeEvent } from "shared/modules/table/table.component";
-import { Dataset } from "shared/sdk";
 import {
   changeRelatedDatasetsPageAction,
   fetchRelatedDatasetsAction,
@@ -12,6 +11,10 @@ import {
 import { selectRelatedDatasetsPageViewModel } from "state-management/selectors/datasets.selectors";
 
 import { RelatedDatasetsComponent } from "./related-datasets.component";
+import { TableModule } from "shared/modules/table/table.module";
+import { createMock } from "shared/MockStubs";
+import { DatasetClass } from "@scicatproject/scicat-sdk-ts-angular";
+import { EmptyContentModule } from "shared/modules/generic-empty-content/empty-content.module";
 
 describe("RelatedDatasetsComponent", () => {
   let component: RelatedDatasetsComponent;
@@ -26,6 +29,7 @@ describe("RelatedDatasetsComponent", () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       declarations: [RelatedDatasetsComponent],
+      imports: [TableModule, EmptyContentModule],
       providers: [
         DatePipe,
         provideMockStore({
@@ -78,7 +82,7 @@ describe("RelatedDatasetsComponent", () => {
         changeRelatedDatasetsPageAction({
           page: event.pageIndex,
           limit: event.pageSize,
-        })
+        }),
       );
       expect(dispatchSpy).toHaveBeenCalledWith(fetchRelatedDatasetsAction());
     });
@@ -86,12 +90,12 @@ describe("RelatedDatasetsComponent", () => {
 
   describe("#onRowClick()", () => {
     it("should navigate to a dataset", () => {
-      const dataset = new Dataset();
+      const dataset = createMock<DatasetClass>({});
 
       component.onRowClick(dataset);
 
       expect(router.navigateByUrl).toHaveBeenCalledOnceWith(
-        "/datasets/" + encodeURIComponent(dataset.pid)
+        "/datasets/" + encodeURIComponent(dataset.pid),
       );
     });
   });

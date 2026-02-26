@@ -1,19 +1,14 @@
 import { Injectable } from "@angular/core";
-import { Actions, createEffect, ofType, concatLatestFrom } from "@ngrx/effects";
-import { PolicyApi, Policy } from "shared/sdk";
+import { Actions, createEffect, ofType } from "@ngrx/effects";
+import { concatLatestFrom } from "@ngrx/operators";
+import { PoliciesService } from "@scicatproject/scicat-sdk-ts-angular";
 import { Store } from "@ngrx/store";
 import {
   selectQueryParams,
   selectEditableQueryParams,
 } from "state-management/selectors/policies.selectors";
 import * as fromActions from "state-management/actions/policies.actions";
-import {
-  switchMap,
-  withLatestFrom,
-  map,
-  catchError,
-  mergeMap,
-} from "rxjs/operators";
+import { switchMap, map, catchError, mergeMap } from "rxjs/operators";
 import { of } from "rxjs";
 import { selectProfile } from "state-management/selectors/user.selectors";
 import {
@@ -32,20 +27,20 @@ export class PolicyEffects {
       ofType(
         fromActions.fetchPoliciesAction,
         fromActions.changePageAction,
-        fromActions.sortByColumnAction
+        fromActions.sortByColumnAction,
       ),
       concatLatestFrom(() => this.queryParams$),
       map(([action, params]) => params),
       switchMap((params) =>
-        this.policyApi.find<Policy>(params).pipe(
-          mergeMap((policies: Policy[]) => [
+        this.policiesService.policiesControllerFindAllV3(params).pipe(
+          mergeMap((policies) => [
             fromActions.fetchPoliciesCompleteAction({ policies }),
             fromActions.fetchCountAction(),
             fromActions.fetchEditablePoliciesAction(),
           ]),
-          catchError(() => of(fromActions.fetchPoliciesFailedAction()))
-        )
-      )
+          catchError(() => of(fromActions.fetchPoliciesFailedAction())),
+        ),
+      ),
     );
   });
 
@@ -53,11 +48,11 @@ export class PolicyEffects {
     return this.actions$.pipe(
       ofType(fromActions.fetchCountAction),
       switchMap(() =>
-        this.policyApi.count().pipe(
+        this.policiesService.policiesControllerCountV3().pipe(
           map(({ count }) => fromActions.fetchCountCompleteAction({ count })),
-          catchError(() => of(fromActions.fetchCountFailedAction()))
-        )
-      )
+          catchError(() => of(fromActions.fetchCountFailedAction())),
+        ),
+      ),
     );
   });
 
@@ -66,9 +61,9 @@ export class PolicyEffects {
       ofType(
         fromActions.fetchEditablePoliciesAction,
         fromActions.changeEditablePageAction,
-        fromActions.sortEditableByColumnAction
+        fromActions.sortEditableByColumnAction,
       ),
-      withLatestFrom(this.userProfile$, this.editableQueryParams$),
+      concatLatestFrom(() => [this.userProfile$, this.editableQueryParams$]),
       switchMap(([action, profile, params]) => {
         let filter;
         if (!profile) {
@@ -79,14 +74,14 @@ export class PolicyEffects {
           const { order, skip, limit } = params;
           filter = { where: { manager: email }, order, skip, limit };
         }
-        return this.policyApi.find<Policy>(filter).pipe(
-          mergeMap((policies: Policy[]) => [
+        return this.policiesService.policiesControllerFindAllV3(filter).pipe(
+          mergeMap((policies) => [
             fromActions.fetchEditablePoliciesCompleteAction({ policies }),
             fromActions.fetchEditableCountAction(),
           ]),
-          catchError(() => of(fromActions.fetchEditablePoliciesFailedAction()))
+          catchError(() => of(fromActions.fetchEditablePoliciesFailedAction())),
         );
-      })
+      }),
     );
   });
 
@@ -102,13 +97,13 @@ export class PolicyEffects {
           const email = profile.email.toLowerCase();
           filter = { manager: email };
         }
-        return this.policyApi.count(filter).pipe(
+        return this.policiesService.policiesControllerCountV3(filter).pipe(
           map(({ count }) =>
-            fromActions.fetchEditableCountCompleteAction({ count })
+            fromActions.fetchEditableCountCompleteAction({ count }),
           ),
-          catchError(() => of(fromActions.fetchEditableCountFailedAction()))
+          catchError(() => of(fromActions.fetchEditableCountFailedAction())),
         );
-      })
+      }),
     );
   });
 
@@ -116,16 +111,21 @@ export class PolicyEffects {
     return this.actions$.pipe(
       ofType(fromActions.submitPolicyAction),
       switchMap(({ ownerList, policy }) =>
-        this.policyApi.updatewhere(ownerList.join(), policy).pipe(
-          mergeMap(({ submissionResponse }) => [
-            fromActions.submitPolicyCompleteAction({
-              policy: submissionResponse,
-            }),
-            fromActions.fetchPoliciesAction(),
-          ]),
-          catchError(() => of(fromActions.submitPolicyFailedAction()))
-        )
-      )
+        this.policiesService
+          .policiesControllerUpdateWhereV3({
+            data: policy,
+            ownerGroupList: ownerList.join(),
+          })
+          .pipe(
+            mergeMap(({ submissionResponse }) => [
+              fromActions.submitPolicyCompleteAction({
+                policy: submissionResponse,
+              }),
+              fromActions.fetchPoliciesAction(),
+            ]),
+            catchError(() => of(fromActions.submitPolicyFailedAction())),
+          ),
+      ),
     );
   });
 
@@ -136,9 +136,9 @@ export class PolicyEffects {
         fromActions.fetchCountAction,
         fromActions.fetchEditablePoliciesAction,
         fromActions.fetchEditableCountAction,
-        fromActions.submitPolicyAction
+        fromActions.submitPolicyAction,
       ),
-      switchMap(() => of(loadingAction()))
+      switchMap(() => of(loadingAction())),
     );
   });
 
@@ -152,15 +152,15 @@ export class PolicyEffects {
         fromActions.fetchEditableCountCompleteAction,
         fromActions.fetchEditableCountFailedAction,
         fromActions.submitPolicyCompleteAction,
-        fromActions.submitPolicyFailedAction
+        fromActions.submitPolicyFailedAction,
       ),
-      switchMap(() => of(loadingCompleteAction()))
+      switchMap(() => of(loadingCompleteAction())),
     );
   });
 
   constructor(
     private actions$: Actions,
-    private policyApi: PolicyApi,
-    private store: Store
+    private policiesService: PoliciesService,
+    private store: Store,
   ) {}
 }

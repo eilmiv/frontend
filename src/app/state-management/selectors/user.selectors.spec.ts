@@ -1,47 +1,50 @@
 import * as fromSelectors from "./user.selectors";
 
 import { UserState } from "../state/user.store";
-import { User, UserIdentity, Settings } from "../models";
-import { AccessToken } from "shared/sdk";
+import { Settings } from "../models";
+import {
+  ReturnedUserDto,
+  UserIdentity,
+} from "@scicatproject/scicat-sdk-ts-angular";
+import { SDKToken } from "shared/services/auth/auth.service";
 
-const user = new User({
+const user: ReturnedUserDto = {
   id: "testId",
   realm: "testRealm",
   username: "testName",
   email: "test@email.com",
   emailVerified: true,
-  password: "testPassword",
-  accessTokens: [],
-  identities: [],
-  credentials: [],
-});
+  authStrategy: "local",
+};
 
 const userIdentity: UserIdentity = {
-  id: "testId",
-  user,
+  ...user,
   provider: "testProvider",
-  authScheme: "testScheme",
   externalId: "testId",
   credentials: null,
   userId: "testId",
-  created: new Date(),
-  modified: new Date(),
+  created: new Date().toISOString(),
+  modified: new Date().toISOString(),
   profile: {
     id: "testId",
     displayName: "testName",
     email: "test@email.com",
     username: "testName",
     thumbnailPhoto: "data",
+    accessGroups: [],
+    emails: [],
+    oidcClaims: [],
   },
 };
 
-const scicatToken: AccessToken = {
+const scicatToken: SDKToken = {
   id: "testId",
   ttl: 100,
   scopes: ["string"],
-  created: new Date(),
+  created: new Date().toISOString(),
   userId: "testId",
   user: null,
+  rememberMe: false,
 };
 
 const settings: Settings = {
@@ -51,7 +54,7 @@ const settings: Settings = {
   darkTheme: false,
 };
 
-const initialUserState: UserState = {
+export const initialUserState: UserState = {
   currentUser: user,
   profile: userIdentity.profile,
   accountType: "testType",
@@ -68,13 +71,62 @@ const initialUserState: UserState = {
   isLoading: false,
 
   columns: [{ name: "datasetName", order: 1, type: "standard", enabled: true }],
+
+  filters: [
+    {
+      key: "creationLocation",
+      label: "Location",
+      type: "multiSelect",
+      description: "Filter by creation location on the dataset",
+      enabled: true,
+    },
+    {
+      key: "pid",
+      label: "Pid",
+      type: "text",
+      description: "Filter by dataset pid",
+      enabled: true,
+    },
+    {
+      key: "ownerGroup",
+      label: "Group",
+      type: "multiSelect",
+      description: "Filter by owner group of the dataset",
+      enabled: true,
+    },
+    {
+      key: "type",
+      label: "Type",
+      type: "multiSelect",
+      description: "Filter by dataset type",
+      enabled: true,
+    },
+    {
+      key: "keywords",
+      label: "Keyword",
+      type: "multiSelect",
+      description: "Filter by keywords in the dataset",
+      enabled: true,
+    },
+    {
+      key: "creationTime",
+      label: "Creation Time",
+      type: "dateRange",
+      description: "Filter by creation time of the dataset",
+      enabled: true,
+    },
+  ],
+
+  conditions: [],
+  tablesSettings: {},
+  hasFetchedSettings: false,
 };
 
 describe("User Selectors", () => {
   describe("selectCurrentUser", () => {
     it("should select currentUser", () => {
       expect(
-        fromSelectors.selectCurrentUser.projector(initialUserState)
+        fromSelectors.selectCurrentUser.projector(initialUserState),
       ).toEqual(user);
     });
   });
@@ -83,8 +135,8 @@ describe("User Selectors", () => {
     it("should select the id from currentUser", () => {
       expect(
         fromSelectors.selectCurrentUserId.projector(
-          initialUserState.currentUser
-        )
+          initialUserState.currentUser,
+        ),
       ).toEqual("testId");
     });
   });
@@ -92,7 +144,7 @@ describe("User Selectors", () => {
   describe("selectProfile", () => {
     it("should select profile", () => {
       expect(fromSelectors.selectProfile.projector(initialUserState)).toEqual(
-        userIdentity.profile
+        userIdentity.profile,
       );
     });
   });
@@ -102,8 +154,8 @@ describe("User Selectors", () => {
       expect(
         fromSelectors.selectCurrentUserName.projector(
           initialUserState.profile,
-          initialUserState.currentUser
-        )
+          initialUserState.currentUser,
+        ),
       ).toEqual("testName");
     });
   });
@@ -111,7 +163,7 @@ describe("User Selectors", () => {
   describe("selectThumbnailPhoto", () => {
     it("should return a thumbnail photo string if it exists", () => {
       expect(
-        fromSelectors.selectThumbnailPhoto.projector(initialUserState.profile)
+        fromSelectors.selectThumbnailPhoto.projector(initialUserState.profile),
       ).toEqual("data");
     });
   });
@@ -121,19 +173,14 @@ describe("User Selectors", () => {
       const username = initialUserState.currentUser
         ? initialUserState.currentUser.username
         : "";
-      expect(
-        fromSelectors.selectIsAdmin.projector(
-          username,
-          initialUserState.accountType
-        )
-      ).toEqual(false);
+      expect(fromSelectors.selectIsAdmin.projector(username)).toEqual(false);
     });
   });
 
   describe("selectScicatToken", () => {
     it("should select scicatToken", () => {
       expect(
-        fromSelectors.selectScicatToken.projector(initialUserState)
+        fromSelectors.selectScicatToken.projector(initialUserState),
       ).toEqual(scicatToken.id);
     });
   });
@@ -141,7 +188,7 @@ describe("User Selectors", () => {
   describe("selectUserMessage", () => {
     it("should select message", () => {
       expect(fromSelectors.selectUserMessage.projector(initialUserState)).toBe(
-        undefined
+        undefined,
       );
     });
   });
@@ -149,7 +196,7 @@ describe("User Selectors", () => {
   describe("selectSettings", () => {
     it("should select settings", () => {
       expect(fromSelectors.selectSettings.projector(initialUserState)).toEqual(
-        settings
+        settings,
       );
     });
   });
@@ -157,7 +204,7 @@ describe("User Selectors", () => {
   describe("selectTapeCopies", () => {
     it("should select tapeCopies from settings", () => {
       expect(
-        fromSelectors.selectTapeCopies.projector(initialUserState.settings)
+        fromSelectors.selectTapeCopies.projector(initialUserState.settings),
       ).toEqual("one");
     });
   });
@@ -165,7 +212,7 @@ describe("User Selectors", () => {
   describe("selectTheme", () => {
     it("it should select darkTheme from settings", () => {
       expect(
-        fromSelectors.selectTheme.projector(initialUserState.settings)
+        fromSelectors.selectTheme.projector(initialUserState.settings),
       ).toEqual(false);
     });
   });
@@ -173,7 +220,7 @@ describe("User Selectors", () => {
   describe("selectIsLoggingIn", () => {
     it("should select isLoggingIn", () => {
       expect(
-        fromSelectors.selectIsLoggingIn.projector(initialUserState)
+        fromSelectors.selectIsLoggingIn.projector(initialUserState),
       ).toEqual(false);
     });
   });
@@ -181,7 +228,7 @@ describe("User Selectors", () => {
   describe("selectIsLoggedIn", () => {
     it("should select isLoggedIn", () => {
       expect(
-        fromSelectors.selectIsLoggedIn.projector(initialUserState)
+        fromSelectors.selectIsLoggedIn.projector(initialUserState),
       ).toEqual(false);
     });
   });
@@ -189,7 +236,7 @@ describe("User Selectors", () => {
   describe("selectIsLoading", () => {
     it("should select isLoading", () => {
       expect(fromSelectors.selectIsLoading.projector(initialUserState)).toEqual(
-        false
+        false,
       );
     });
   });
@@ -207,8 +254,8 @@ describe("User Selectors", () => {
       expect(
         fromSelectors.selectSampleDialogPageViewModel.projector(
           initialUserState.currentUser,
-          initialUserState.profile
-        )
+          initialUserState.profile,
+        ),
       ).toEqual({ user, profile: userIdentity.profile });
     });
   });
@@ -218,8 +265,8 @@ describe("User Selectors", () => {
       expect(
         fromSelectors.selectLoginPageViewModel.projector(
           initialUserState.isLoggedIn,
-          initialUserState.isLoggingIn
-        )
+          initialUserState.isLoggingIn,
+        ),
       ).toEqual({ isLoggedIn: false, isLoggingIn: false });
     });
   });
@@ -231,8 +278,8 @@ describe("User Selectors", () => {
           initialUserState.currentUser,
           initialUserState.profile,
           initialUserState.scicatToken.id,
-          initialUserState.settings
-        )
+          initialUserState.settings,
+        ),
       ).toEqual({
         user,
         profile: userIdentity.profile,

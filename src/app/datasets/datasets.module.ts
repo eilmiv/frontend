@@ -4,7 +4,7 @@ import { LinkyModule } from "ngx-linky";
 import { ArchivingService } from "./archiving.service";
 import { BatchViewComponent } from "./batch-view/batch-view.component";
 import { AsyncPipe, CommonModule } from "@angular/common";
-import { FlexLayoutModule } from "@angular/flex-layout";
+import { FlexLayoutModule } from "@ngbracket/ngx-layout";
 import { FormsModule, ReactiveFormsModule } from "@angular/forms";
 import { MatButtonToggleModule } from "@angular/material/button-toggle";
 import { MatChipsModule } from "@angular/material/chips";
@@ -18,13 +18,7 @@ import { MatAutocompleteModule } from "@angular/material/autocomplete";
 import { MatButtonModule } from "@angular/material/button";
 import { MatCardModule } from "@angular/material/card";
 import { MatCheckboxModule } from "@angular/material/checkbox";
-import {
-  DateAdapter,
-  MatNativeDateModule,
-  MatOptionModule,
-  MAT_DATE_FORMATS,
-  MAT_DATE_LOCALE,
-} from "@angular/material/core";
+import { MatOptionModule } from "@angular/material/core";
 import { MatDialogModule } from "@angular/material/dialog";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatGridListModule } from "@angular/material/grid-list";
@@ -50,15 +44,14 @@ import { DatasetDetailsDashboardComponent } from "./dataset-details-dashboard/da
 import { DashboardComponent } from "./dashboard/dashboard.component";
 import { DatablocksComponent } from "./datablocks-table/datablocks-table.component";
 import { DatafilesComponent } from "./datafiles/datafiles.component";
-import { DatasetDetailComponent } from "./dataset-detail/dataset-detail.component";
+import { JsonScientificMetadataComponent } from "./jsonScientificMetadata/jsonScientificMetadata.component";
+import { DatasetDetailComponent } from "./dataset-detail/dataset-detail/dataset-detail.component";
 import { DatasetTableComponent } from "./dataset-table/dataset-table.component";
 import { DatasetsFilterComponent } from "./datasets-filter/datasets-filter.component";
 import { AddDatasetDialogComponent } from "./add-dataset-dialog/add-dataset-dialog.component";
-import { DatasetTableSettingsComponent } from "./dataset-table-settings/dataset-table-settings.component";
 import { DatasetTableActionsComponent } from "./dataset-table-actions/dataset-table-actions.component";
 import { DatasetLifecycleComponent } from "./dataset-lifecycle/dataset-lifecycle.component";
 import { SampleEditComponent } from "./sample-edit/sample-edit.component";
-import { LuxonDateAdapter, MAT_LUXON_DATE_FORMATS } from "ngx-material-luxon";
 import { MatDatepickerModule } from "@angular/material/datepicker";
 import { ShareDialogComponent } from "./share-dialog/share-dialog.component";
 import { UserEffects } from "state-management/effects/user.effects";
@@ -80,6 +73,24 @@ import { AdminTabComponent } from "./admin-tab/admin-tab.component";
 import { instrumentsReducer } from "state-management/reducers/instruments.reducer";
 import { InstrumentEffects } from "state-management/effects/instruments.effects";
 import { RelatedDatasetsComponent } from "./related-datasets/related-datasets.component";
+import { MatMenuModule } from "@angular/material/menu";
+import { DatasetsFilterSettingsComponent } from "./datasets-filter/settings/datasets-filter-settings.component";
+import { CdkDrag, CdkDragHandle, CdkDropList } from "@angular/cdk/drag-drop";
+import { userReducer } from "state-management/reducers/user.reducer";
+import { MatSnackBarModule } from "@angular/material/snack-bar";
+import { JsonFormsModule } from "@jsonforms/angular";
+import { JsonFormsAngularMaterialModule } from "@jsonforms/angular-material";
+import { DatasetDetailDynamicComponent } from "./dataset-detail/dataset-detail-dynamic/dataset-detail-dynamic.component";
+import { DatasetDetailWrapperComponent } from "./dataset-detail/dataset-detail-wrapper.component";
+import { JsonHeadPipe } from "shared/pipes/json-head.pipe";
+import { ThumbnailPipe } from "shared/pipes/thumbnail.pipe";
+import { IngestorModule } from "../ingestor/ingestor.module";
+import { MatExpansionModule } from "@angular/material/expansion";
+import { MatBadgeModule } from "@angular/material/badge";
+import { TitleCasePipe } from "shared/pipes/title-case.pipe";
+import { ConfigurableActionsModule } from "shared/modules/configurable-actions/configurable-actions.module";
+import { OverlayModule } from "@angular/cdk/overlay";
+import { SharedConditionModule } from "shared/modules/shared-condition/shared-condition.module";
 
 @NgModule({
   imports: [
@@ -88,6 +99,8 @@ import { RelatedDatasetsComponent } from "./related-datasets/related-datasets.co
     FlexLayoutModule,
     FormsModule,
     LinkyModule,
+    JsonFormsModule,
+    JsonFormsAngularMaterialModule,
     MatAutocompleteModule,
     MatButtonModule,
     MatButtonToggleModule,
@@ -101,7 +114,6 @@ import { RelatedDatasetsComponent } from "./related-datasets/related-datasets.co
     MatIconModule,
     MatInputModule,
     MatListModule,
-    MatNativeDateModule,
     MatOptionModule,
     MatPaginatorModule,
     MatRadioModule,
@@ -112,6 +124,7 @@ import { RelatedDatasetsComponent } from "./related-datasets/related-datasets.co
     MatStepperModule,
     MatTableModule,
     MatTabsModule,
+    MatSnackBarModule,
     MatTooltipModule,
     NgxJsonViewerModule,
     ReactiveFormsModule,
@@ -134,21 +147,35 @@ import { RelatedDatasetsComponent } from "./related-datasets/related-datasets.co
     StoreModule.forFeature("samples", samplesReducer),
     StoreModule.forFeature("publishedData", publishedDataReducer),
     StoreModule.forFeature("logbooks", logbooksReducer),
+    StoreModule.forFeature("users", userReducer),
     LogbooksModule,
+    MatMenuModule,
+    CdkDropList,
+    CdkDrag,
+    CdkDragHandle,
+    // FiltersModule,
+    IngestorModule,
+    MatExpansionModule,
+    MatBadgeModule,
+    OverlayModule,
+    IngestorModule,
+    SharedConditionModule,
   ],
   declarations: [
     BatchViewComponent,
     DashboardComponent,
     DatablocksComponent,
+    JsonScientificMetadataComponent,
     DatafilesComponent,
+    DatasetDetailWrapperComponent,
     DatasetDetailComponent,
+    DatasetDetailDynamicComponent,
     DatasetTableComponent,
     DatasetsFilterComponent,
     PublishComponent,
     ReduceComponent,
     DatasetDetailsDashboardComponent,
     AddDatasetDialogComponent,
-    DatasetTableSettingsComponent,
     DatasetTableActionsComponent,
     DatasetLifecycleComponent,
     SampleEditComponent,
@@ -157,25 +184,24 @@ import { RelatedDatasetsComponent } from "./related-datasets/related-datasets.co
     DatasetFileUploaderComponent,
     AdminTabComponent,
     RelatedDatasetsComponent,
+    DatasetsFilterSettingsComponent,
   ],
   providers: [
     ArchivingService,
     AsyncPipe,
+    JsonHeadPipe,
+    ThumbnailPipe,
     ADAuthService,
+    SharedScicatFrontendModule,
     FileSizePipe,
-    {
-      provide: DateAdapter,
-      useClass: LuxonDateAdapter,
-      deps: [MAT_DATE_LOCALE],
-    },
-    { provide: MAT_DATE_FORMATS, useValue: MAT_LUXON_DATE_FORMATS },
-    { provide: MAT_DATE_LOCALE, useValue: "sv-SE" },
+    TitleCasePipe,
   ],
   exports: [
     DashboardComponent,
     DatablocksComponent,
+    JsonScientificMetadataComponent,
     DatafilesComponent,
-    DatasetDetailComponent,
+    DatasetDetailWrapperComponent,
     DatasetTableComponent,
     DatasetsFilterComponent,
   ],

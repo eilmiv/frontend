@@ -1,7 +1,7 @@
 <ng-container *ngIf="vm$ | async as vm">
   <div fxLayout="row" fxLayout.lt-lg="column">
     <div fxFlex="14" fxFlex.lt-xl="20">
-      <ng-template [ngIf]="appConfig.editSampleEnabled">
+      <ng-template [ngIf]="appConfig.addSampleEnabled">
         <button
           mat-stroked-button
           class="small-edit-sample"
@@ -12,58 +12,52 @@
       </ng-template>
       <ng-template [ngIf]="appConfig.searchSamples">
         <mat-card class="big-search">
-          <div class="title">Search</div>
-          <app-search-bar
-            [prefilledValue]="vm.textFilter"
-            (search)="onTextSearchChange($event)"
-            (searchBarFocus)="onTextSearchChange($event)"
-          ></app-search-bar>
-          <div *ngIf="appConfig.scienceSearchEnabled">
-            <button
-              mat-button
-              color="primary"
-              (click)="openSearchParametersDialog()"
-            >
-              <mat-icon>add</mat-icon> Add Characteristic
-            </button>
+          <mat-card-header>
+            <mat-card-title>Search</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <app-search-bar
+              [prefilledValue]="vm.textFilter"
+              (search)="onTextSearchChange($event)"
+            ></app-search-bar>
 
-            <mat-chip-list
-              class="characteristic-chips"
-              aria-orientation="vertical"
-            >
-              <mat-chip
-                *ngFor="
-                  let characteristic of vm.characteristicsFilter;
-                  index as i
-                "
+            
+            <shared-condition
+              #conditionFilter
+              *ngIf="appConfig.scienceSearchEnabled"
+              [showConditions]="true"
+              [metadataKeys]="vm.metadataKeys"
+              [unitsEnabled]="appConfig.scienceSearchUnitsEnabled"
+              [showConditionToggle]="false"
+              [conditionType]="'samples'"
+              [addConditionAction]="addCondition"
+              [removeConditionAction]="removeCondition"
+            ></shared-condition>
+
+            <div class="section-container">
+              <button
+                [disabled]="!vm.hasAppliedFilters"
+                mat-raised-button
+                color="secondary"
+                class="samples-filters-clear-button"
+                data-cy="samples-filters-clear-button"
+                (click)="reset()"
               >
-                {{ characteristic.lhs }}
-                <ng-container [ngSwitch]="characteristic.relation">
-                  <ng-container *ngSwitchCase="'EQUAL_TO_NUMERIC'">
-                    &nbsp;=&nbsp;
-                  </ng-container>
-                  <ng-container *ngSwitchCase="'EQUAL_TO_STRING'">
-                    &nbsp;=&nbsp;
-                  </ng-container>
-                  <ng-container *ngSwitchCase="'LESS_THAN'">
-                    &nbsp;&lt;&nbsp;
-                  </ng-container>
-                  <ng-container *ngSwitchCase="'GREATER_THAN'">
-                    &nbsp;&gt;&nbsp;
-                  </ng-container>
-                </ng-container>
-                {{
-                  characteristic.relation === "EQUAL_TO_STRING"
-                    ? '"' + characteristic.rhs + '"'
-                    : characteristic.rhs
-                }}
-                {{ characteristic.unit | prettyUnit }}
-                <mat-icon matChipRemove (click)="removeCharacteristic(i)">
-                  cancel
-                </mat-icon>
-              </mat-chip>
-            </mat-chip-list>
-          </div>
+                <mat-icon>undo</mat-icon>
+                Clear
+              </button>
+              <button
+                mat-raised-button
+                color="primary"
+                class="samples-filters-search-button"
+                data-cy="samples-filters-search-button"
+                (click)="applyFilters()"
+              >
+                <mat-icon>search</mat-icon>
+                Apply
+              </button>
+            </div>
+          </mat-card-content>
         </mat-card>
         <div class="small-search" fxFlexOrder="2">
           <app-search-bar
@@ -73,24 +67,33 @@
           ></app-search-bar>
         </div>
       </ng-template>
-      <ng-template [ngIf]="appConfig.editSampleEnabled">
+      <ng-template [ngIf]="appConfig.addSampleEnabled">
         <mat-card class="big-edit-sample" (click)="openDialog()">
-          <mat-icon>add_circle</mat-icon> Create Sample
+          <mat-card-content>
+            <mat-icon>add_circle</mat-icon> Create Sample
+          </mat-card-content>
         </mat-card>
       </ng-template>
     </div>
     <div fxFlex="63" fxFlex.lt-xl="80">
-      <app-table
-        [data]="tableData"
-        [columns]="tableColumns"
-        [paginate]="tablePaginate"
-        [currentPage]="vm.samplesPagination.currentPage"
-        [dataCount]="vm.samplesPagination.samplesCount"
-        [dataPerPage]="vm.samplesPagination.samplesPerPage"
-        (pageChange)="onPageChange($event)"
-        (sortChange)="onSortChange($event)"
-        (rowClick)="onRowClick($event)"
-      ></app-table>
+      <dynamic-mat-table
+        [tableName]="tableName"
+        [columns]="columns"
+        [pending]="pending"
+        [setting]="setting"
+        [pagingMode]="paginationMode"
+        [dataSource]="dataSource"
+        [pagination]="pagination"
+        [rowSelectionMode]="rowSelectionMode"
+        [showGlobalTextSearch]="showGlobalTextSearch"
+        (paginationChange)="onPaginationChange($event)"
+        (onRowEvent)="onRowClick($event)"
+        (settingChange)="onSettingChange($event)"
+        (onTableEvent)="onTableEvent($event)"
+        style="height: 70vh"
+        class="mat-elevation-z2"
+      >
+      </dynamic-mat-table>
     </div>
   </div>
 </ng-container>

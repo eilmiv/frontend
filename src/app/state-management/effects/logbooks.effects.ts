@@ -1,6 +1,11 @@
 import { Injectable } from "@angular/core";
-import { createEffect, Actions, ofType, concatLatestFrom } from "@ngrx/effects";
-import { LogbookApi, Logbook } from "shared/sdk";
+import { createEffect, Actions, ofType } from "@ngrx/effects";
+import { concatLatestFrom } from "@ngrx/operators";
+import {
+  DatasetsService,
+  Logbook,
+  LogbooksService,
+} from "@scicatproject/scicat-sdk-ts-angular";
 import * as fromActions from "state-management/actions/logbooks.actions";
 import { mergeMap, catchError, map, timeout } from "rxjs/operators";
 import { of } from "rxjs";
@@ -20,13 +25,13 @@ export class LogbookEffects {
     return this.actions$.pipe(
       ofType(fromActions.fetchLogbooksAction),
       mergeMap(() =>
-        this.logbookApi.find<Logbook>().pipe(
+        this.logbooksService.logbooksControllerFindAllV3().pipe(
           map((logbooks: Logbook[]) =>
-            fromActions.fetchLogbooksCompleteAction({ logbooks })
+            fromActions.fetchLogbooksCompleteAction({ logbooks }),
           ),
-          catchError(() => of(fromActions.fetchLogbooksFailedAction()))
-        )
-      )
+          catchError(() => of(fromActions.fetchLogbooksFailedAction())),
+        ),
+      ),
     );
   });
 
@@ -34,18 +39,18 @@ export class LogbookEffects {
     return this.actions$.pipe(
       ofType(fromActions.fetchLogbookAction),
       concatLatestFrom(() => this.filters$),
-      mergeMap(([{ name }, filters]) =>
-        this.logbookApi
-          .findByName(encodeURIComponent(name), JSON.stringify(filters))
+      mergeMap(([{ name }, filters]) => {
+        return this.logbooksService
+          .logbooksControllerFindByNameV3(name, JSON.stringify(filters))
           .pipe(
             timeout(3000),
-            mergeMap((logbook) => [
+            mergeMap((logbook: Logbook) => [
               fromActions.fetchLogbookCompleteAction({ logbook }),
               fromActions.fetchCountAction({ name }),
             ]),
-            catchError(() => of(fromActions.fetchLogbookFailedAction()))
-          )
-      )
+            catchError(() => of(fromActions.fetchLogbookFailedAction())),
+          );
+      }),
     );
   });
 
@@ -54,16 +59,17 @@ export class LogbookEffects {
       ofType(fromActions.fetchDatasetLogbookAction),
       concatLatestFrom(() => this.filters$),
       mergeMap(([{ pid }, filters]) =>
-        this.logbookApi
-          .findDatasetLogbook(encodeURIComponent(pid), JSON.stringify(filters))
+        this.datasetsService
+          .datasetsControllerFindLogbookByPidV3(pid, JSON.stringify(filters))
           .pipe(
             timeout(3000),
             mergeMap((logbook) => [
-              fromActions.fetchLogbookCompleteAction({ logbook })
+              fromActions.fetchLogbookCompleteAction({ logbook }),
+              fromActions.fetchCountAction({ pid }),
             ]),
-            catchError(() => of(fromActions.fetchDatasetLogbookFailedAction()))
-          )
-      )
+            catchError(() => of(fromActions.fetchDatasetLogbookFailedAction())),
+          ),
+      ),
     );
   });
 
@@ -71,19 +77,27 @@ export class LogbookEffects {
     return this.actions$.pipe(
       ofType(fromActions.fetchCountAction),
       concatLatestFrom(() => this.filters$),
-      mergeMap(([{ name }, filters]) => {
+      mergeMap(([{ name, pid }, filters]) => {
         const { skip, limit, sortField, ...theRest } = filters;
-        return this.logbookApi
-          .findByName(encodeURIComponent(name), JSON.stringify(theRest))
-          .pipe(
-            map((logbook: Logbook) =>
-              fromActions.fetchCountCompleteAction({
-                count: logbook.messages.length,
-              })
-            ),
-            catchError(() => of(fromActions.fetchCountFailedAction()))
-          );
-      })
+        return (
+          name
+            ? this.logbooksService.logbooksControllerFindByNameV3(
+                name,
+                JSON.stringify(theRest),
+              )
+            : this.datasetsService.datasetsControllerFindLogbookByPidV3(
+                pid,
+                JSON.stringify(theRest),
+              )
+        ).pipe(
+          map((logbook: Logbook) => {
+            return fromActions.fetchCountCompleteAction({
+              count: logbook.messages.length,
+            });
+          }),
+          catchError(() => of(fromActions.fetchCountFailedAction())),
+        );
+      }),
     );
   });
 
@@ -92,9 +106,9 @@ export class LogbookEffects {
       ofType(
         fromActions.fetchLogbooksAction,
         fromActions.fetchLogbookAction,
-        fromActions.fetchCountAction
+        fromActions.fetchCountAction,
       ),
-      mergeMap(() => of(loadingAction()))
+      mergeMap(() => of(loadingAction())),
     );
   });
 
@@ -106,15 +120,16 @@ export class LogbookEffects {
         fromActions.fetchLogbookCompleteAction,
         fromActions.fetchLogbookFailedAction,
         fromActions.fetchCountCompleteAction,
-        fromActions.fetchCountFailedAction
+        fromActions.fetchCountFailedAction,
       ),
-      mergeMap(() => of(loadingCompleteAction()))
+      mergeMap(() => of(loadingCompleteAction())),
     );
   });
 
   constructor(
     private actions$: Actions,
-    private logbookApi: LogbookApi,
-    private store: Store
+    private logbooksService: LogbooksService,
+    private datasetsService: DatasetsService,
+    private store: Store,
   ) {}
 }

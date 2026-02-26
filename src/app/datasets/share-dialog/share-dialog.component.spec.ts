@@ -1,45 +1,95 @@
+/* eslint @typescript-eslint/no-empty-function:0 */
+
 import {
   ComponentFixture,
   fakeAsync,
   TestBed,
   tick,
 } from "@angular/core/testing";
-import { MatButtonModule } from "@angular/material/button";
-import { MatChipsModule } from "@angular/material/chips";
-import { MatDialogModule, MatDialogRef } from "@angular/material/dialog";
-import { MatFormFieldModule } from "@angular/material/form-field";
-import { MatIconModule } from "@angular/material/icon";
-import { MatInputModule } from "@angular/material/input";
+import { MAT_DIALOG_DATA, MatDialogRef } from "@angular/material/dialog";
 import { BrowserAnimationsModule } from "@angular/platform-browser/animations";
-import { Store } from "@ngrx/store";
-import { of } from "rxjs";
-import { MockStore, MockUserIdentityApi } from "shared/MockStubs";
-import { UserIdentityApi } from "shared/sdk";
+import { Store, StoreModule } from "@ngrx/store";
+import {
+  MockAppConfigService,
+  MockAuthService,
+  MockDatasetApi,
+  MockHttp,
+  MockPublishedDataApi,
+  MockStore,
+  MockUserApi,
+  MockUserIdentityApi,
+} from "shared/MockStubs";
 import { showMessageAction } from "state-management/actions/user.actions";
 import { Message, MessageType } from "state-management/models";
 
 import { ShareDialogComponent } from "./share-dialog.component";
+import { DatasetsModule } from "datasets/datasets.module";
+import { EffectsModule } from "@ngrx/effects";
+import { AppConfigService } from "app-config.service";
+import { HttpClient } from "@angular/common/http";
+import {
+  Configuration,
+  DatasetsService,
+  InstrumentsService,
+  JobsService,
+  LogbooksService,
+  ProposalsService,
+  PublishedDataService,
+  SamplesService,
+  UserIdentitiesService,
+  UsersService,
+} from "@scicatproject/scicat-sdk-ts-angular";
+import { AuthService } from "shared/services/auth/auth.service";
+import { InternalStorage } from "shared/services/auth/base.storage";
+import { cold } from "jasmine-marbles";
+import { Observable, of } from "rxjs";
+
+const data = {
+  infoMessage: "",
+  disableShareButton: false,
+  sharedUsersList: [],
+};
 
 describe("ShareDialogComponent", () => {
   let component: ShareDialogComponent;
   let fixture: ComponentFixture<ShareDialogComponent>;
+  const appconfig = new MockAppConfigService(null);
+  const authService = new MockAuthService();
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       declarations: [ShareDialogComponent],
       imports: [
+        DatasetsModule,
         BrowserAnimationsModule,
-        MatButtonModule,
-        MatChipsModule,
-        MatDialogModule,
-        MatFormFieldModule,
-        MatIconModule,
-        MatInputModule,
+        EffectsModule.forRoot([]),
+        StoreModule.forRoot({}),
       ],
       providers: [
         { provide: MatDialogRef, useValue: { close: () => {} } },
         { provide: Store, useClass: MockStore },
-        { provide: UserIdentityApi, useClass: MockUserIdentityApi },
+        { provide: UserIdentitiesService, useClass: MockUserIdentityApi },
+        { provide: LogbooksService, useValue: {} },
+        { provide: DatasetsService, useClass: MockDatasetApi },
+        { provide: AppConfigService, useValue: appconfig },
+        { provide: HttpClient, useClass: MockHttp },
+        { provide: AuthService, useValue: authService },
+        { provide: UsersService, useClass: MockUserApi },
+        { provide: InstrumentsService, useValue: {} },
+        { provide: JobsService, useValue: {} },
+        { provide: ProposalsService, useValue: {} },
+        { provide: SamplesService, useValue: {} },
+        { provide: PublishedDataService, useClass: MockPublishedDataApi },
+        { provide: MAT_DIALOG_DATA, useValue: data },
+        {
+          provide: Configuration,
+          useClass: Configuration,
+        },
+        {
+          provide: UserIdentitiesService,
+          useValue: { userIdentitiesControllerIsValidEmailV3: () => {} },
+        },
+        InternalStorage,
       ],
     }).compileComponents();
   });
@@ -85,7 +135,10 @@ describe("ShareDialogComponent", () => {
 
   describe("#add()", () => {
     it("should dispatch a showMessageAction with type `error` if user does not exist", fakeAsync(() => {
-      spyOn(component.userIdentityApi, "findOne").and.throwError("Not found");
+      spyOn(
+        component.userIdentitiesService,
+        "userIdentitiesControllerIsValidEmailV3",
+      ).and.throwError("Not found");
       const dispatchSpy = spyOn(component.store, "dispatch");
       const email = "test@email.com";
 
@@ -95,7 +148,7 @@ describe("ShareDialogComponent", () => {
       const message = new Message(
         "The email address is not connected to a SciCat user",
         MessageType.Error,
-        5000
+        5000,
       );
 
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
@@ -110,9 +163,11 @@ describe("ShareDialogComponent", () => {
           email,
         },
       };
-      spyOn(component.userIdentityApi, "findOne").and.returnValue(
-        of(userIdentity)
-      );
+      // TODO: Fix this any type casting here
+      spyOn(
+        component.userIdentitiesService,
+        "userIdentitiesControllerIsValidEmailV3",
+      ).and.returnValue(of(true) as any);
       component.emailFormControl.setValue(email);
       expect(component.emailFormControl.value).toEqual(email);
 

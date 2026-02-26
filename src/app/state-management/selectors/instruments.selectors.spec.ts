@@ -1,8 +1,9 @@
 import { InstrumentState } from "state-management/state/instruments.store";
 import * as fromSelectors from "./instruments.selectors";
-import { GenericFilters, Instrument } from "state-management/models";
-
-const instrument = new Instrument();
+import * as fromUserSelectors from "./user.selectors";
+import { GenericFilters } from "state-management/models";
+import { mockInstrument as instrument } from "shared/MockStubs";
+import { initialUserState } from "./user.selectors.spec";
 
 const instrumentFilters: GenericFilters = {
   sortField: "name desc",
@@ -22,7 +23,7 @@ describe("Instrument Selectors", () => {
   describe("selectInstruments", () => {
     it("should select instruments", () => {
       expect(
-        fromSelectors.selectInstruments.projector(initialInstrumentState)
+        fromSelectors.selectInstruments.projector(initialInstrumentState),
       ).toEqual([]);
     });
   });
@@ -30,7 +31,7 @@ describe("Instrument Selectors", () => {
   describe("selectCurrentInstrument", () => {
     it("should select current instrument", () => {
       expect(
-        fromSelectors.selectCurrentInstrument.projector(initialInstrumentState)
+        fromSelectors.selectCurrentInstrument.projector(initialInstrumentState),
       ).toEqual(instrument);
     });
   });
@@ -38,7 +39,7 @@ describe("Instrument Selectors", () => {
   describe("selectInstrumentsCount", () => {
     it("should select the total instruments count", () => {
       expect(
-        fromSelectors.selectInstrumentsCount.projector(initialInstrumentState)
+        fromSelectors.selectInstrumentsCount.projector(initialInstrumentState),
       ).toEqual(0);
     });
   });
@@ -46,7 +47,7 @@ describe("Instrument Selectors", () => {
   describe("selectFilters", () => {
     it("should select the filters", () => {
       expect(
-        fromSelectors.selectFilters.projector(initialInstrumentState)
+        fromSelectors.selectFilters.projector(initialInstrumentState),
       ).toEqual(instrumentFilters);
     });
   });
@@ -56,7 +57,7 @@ describe("Instrument Selectors", () => {
       const { skip, limit } = instrumentFilters;
       const page = skip / limit;
       expect(
-        fromSelectors.selectPage.projector(initialInstrumentState.filters)
+        fromSelectors.selectPage.projector(initialInstrumentState.filters),
       ).toEqual(page);
     });
   });
@@ -66,30 +67,35 @@ describe("Instrument Selectors", () => {
       const { limit } = instrumentFilters;
       expect(
         fromSelectors.selectInstrumentsPerPage.projector(
-          initialInstrumentState.filters
-        )
+          initialInstrumentState.filters,
+        ),
       ).toEqual(limit);
     });
   });
 
-  describe("selectInstrumentsDashboardPageViewModel", () => {
+  describe("selectInstrumentsWithCountAndTableSettings", () => {
     it("should select the instruments dashboard page view model", () => {
       expect(
-        fromSelectors.selectInstrumentsDashboardPageViewModel.projector(
+        fromSelectors.selectInstrumentsWithCountAndTableSettings.projector(
           fromSelectors.selectInstruments.projector(initialInstrumentState),
-          fromSelectors.selectPage.projector(initialInstrumentState.filters),
           fromSelectors.selectInstrumentsCount.projector(
-            initialInstrumentState
+            initialInstrumentState,
           ),
-          fromSelectors.selectInstrumentsPerPage.projector(
-            initialInstrumentState.filters
-          )
-        )
+          fromUserSelectors.selectTablesSettings.projector(initialUserState),
+        ),
       ).toEqual({
         instruments: [],
-        currentPage: 0,
-        instrumentsCount: 0,
-        instrumentsPerPage: 25,
+        count: 0,
+        tablesSettings: {},
+      });
+    });
+
+    describe("selectInstrumentWithIdAndLabel", () => {
+      it("should map instruments to objects with _id and label", () => {
+        const instruments = [instrument];
+        expect(
+          fromSelectors.selectInstrumentWithIdAndLabel.projector(instruments),
+        ).toEqual([{ _id: instrument.pid, label: instrument.name }]);
       });
     });
   });

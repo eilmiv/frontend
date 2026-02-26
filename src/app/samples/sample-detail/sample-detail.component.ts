@@ -1,7 +1,6 @@
 import { ActivatedRoute, Router } from "@angular/router";
 import { Component, OnDestroy, OnInit } from "@angular/core";
 import { fromEvent, Subscription } from "rxjs";
-import { Sample, Attachment, User, Dataset } from "shared/sdk/models";
 import { selectSampleDetailPageViewModel } from "../../state-management/selectors/samples.selectors";
 import { Store } from "@ngrx/store";
 import {
@@ -12,6 +11,7 @@ import {
   addAttachmentAction,
   updateAttachmentCaptionAction,
   removeAttachmentAction,
+  fetchSampleAttachmentsAction,
 } from "../../state-management/actions/samples.actions";
 import { DatePipe, SlicePipe } from "@angular/common";
 import { FileSizePipe } from "shared/pipes/filesize.pipe";
@@ -25,6 +25,14 @@ import {
 } from "shared/modules/file-uploader/file-uploader.component";
 import { EditableComponent } from "app-routing/pending-changes.guard";
 import { AppConfigService } from "app-config.service";
+import {
+  CreateAttachmentV3Dto,
+  DatasetClass,
+  OutputAttachmentV3Dto,
+  OutputDatasetObsoleteDto,
+  ReturnedUserDto,
+  SampleClass,
+} from "@scicatproject/scicat-sdk-ts-angular";
 
 export interface TableData {
   pid: string;
@@ -40,16 +48,20 @@ export interface TableData {
   selector: "app-sample-detail",
   templateUrl: "./sample-detail.component.html",
   styleUrls: ["./sample-detail.component.scss"],
+  standalone: false,
 })
-export class SampleDetailComponent implements OnInit, OnDestroy, EditableComponent {
+export class SampleDetailComponent
+  implements OnInit, OnDestroy, EditableComponent
+{
   private _hasUnsavedChanges = false;
   vm$ = this.store.select(selectSampleDetailPageViewModel);
 
   appConfig = this.appConfigService.getConfig();
 
-  sample: Sample = new Sample();
-  user: User = new User();
-  attachment: Partial<Attachment> = new Attachment();
+  sample: SampleClass;
+  user: ReturnedUserDto;
+  attachment: CreateAttachmentV3Dto;
+  attachments: OutputAttachmentV3Dto[] = [];
   show = false;
   subscriptions: Subscription[] = [];
 
@@ -71,10 +83,10 @@ export class SampleDetailComponent implements OnInit, OnDestroy, EditableCompone
     private router: Router,
     private route: ActivatedRoute,
     private slicePipe: SlicePipe,
-    private store: Store
+    private store: Store,
   ) {}
 
-  formatTableData(datasets: Dataset[]): TableData[] {
+  formatTableData(datasets: OutputDatasetObsoleteDto[]): TableData[] {
     let tableData: TableData[] = [];
     if (datasets) {
       tableData = datasets.map((dataset: any) => ({
@@ -85,7 +97,7 @@ export class SampleDetailComponent implements OnInit, OnDestroy, EditableCompone
         size: this.filesizePipe.transform(dataset.size),
         creationTime: this.datePipe.transform(
           dataset.creationTime,
-          "yyyy-MM-dd HH:mm"
+          "yyyy-MM-dd HH:mm",
         ),
         owner: dataset.owner,
         location: dataset.creationLocation,
@@ -99,7 +111,7 @@ export class SampleDetailComponent implements OnInit, OnDestroy, EditableCompone
       saveCharacteristicsAction({
         sampleId: this.sample.sampleId,
         characteristics,
-      })
+      }),
     );
   }
 
@@ -109,18 +121,7 @@ export class SampleDetailComponent implements OnInit, OnDestroy, EditableCompone
       caption: file.name,
       ownerGroup: this.sample.ownerGroup,
       accessGroups: this.sample.accessGroups,
-      createdBy: this.user.username,
-      updatedBy: this.user.username,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      sample: this.sample,
       sampleId: this.sample.sampleId,
-      dataset: undefined,
-      datasetId: undefined,
-      rawDatasetId: undefined,
-      derivedDatasetId: undefined,
-      proposal: undefined,
-      proposalId: undefined,
     };
     this.store.dispatch(addAttachmentAction({ attachment: this.attachment }));
   }
@@ -132,26 +133,29 @@ export class SampleDetailComponent implements OnInit, OnDestroy, EditableCompone
         sampleId: this.sample.sampleId,
         attachmentId,
         caption,
-      })
+      }),
     );
   }
 
   deleteAttachment(attachmentId: string) {
     this.store.dispatch(
-      removeAttachmentAction({ sampleId: this.sample.sampleId, attachmentId })
+      removeAttachmentAction({ sampleId: this.sample.sampleId, attachmentId }),
     );
   }
 
   onPageChange(event: PageChangeEvent) {
     this.store.dispatch(
-      changeDatasetsPageAction({ page: event.pageIndex, limit: event.pageSize })
+      changeDatasetsPageAction({
+        page: event.pageIndex,
+        limit: event.pageSize,
+      }),
     );
     this.store.dispatch(
-      fetchSampleDatasetsAction({ sampleId: this.sample.sampleId })
+      fetchSampleDatasetsAction({ sampleId: this.sample.sampleId }),
     );
   }
 
-  onRowClick(dataset: Dataset) {
+  onRowClick(dataset: DatasetClass) {
     const id = encodeURIComponent(dataset.pid);
     this.router.navigateByUrl("/datasets/" + id);
   }
@@ -161,8 +165,16 @@ export class SampleDetailComponent implements OnInit, OnDestroy, EditableCompone
       this.vm$.subscribe((vm) => {
         if (vm.sample) {
           this.sample = vm.sample;
+
+          if (!this.sample.sampleCharacteristics) {
+            this.sample.sampleCharacteristics = {};
+          }
         }
-      })
+
+        if (vm.attachments) {
+          this.attachments = vm.attachments;
+        }
+      }),
     );
     // Prevent user from reloading page if there are unsave changes
     this.subscriptions.push(
@@ -170,12 +182,12 @@ export class SampleDetailComponent implements OnInit, OnDestroy, EditableCompone
         if (this.hasUnsavedChanges()) {
           event.preventDefault();
         }
-      })
+      }),
     );
     this.subscriptions.push(
       this.vm$.subscribe((vm) => {
         this.tableData = this.formatTableData(vm.datasets);
-      })
+      }),
     );
 
     this.subscriptions.push(
@@ -183,14 +195,17 @@ export class SampleDetailComponent implements OnInit, OnDestroy, EditableCompone
         if (vm.user) {
           this.user = vm.user;
         }
-      })
+      }),
     );
 
     this.subscriptions.push(
       this.route.params.subscribe((params) => {
         this.store.dispatch(fetchSampleAction({ sampleId: params.id }));
+        this.store.dispatch(
+          fetchSampleAttachmentsAction({ sampleId: params.id }),
+        );
         this.store.dispatch(fetchSampleDatasetsAction({ sampleId: params.id }));
-      })
+      }),
     );
   }
   hasUnsavedChanges() {
@@ -199,6 +214,17 @@ export class SampleDetailComponent implements OnInit, OnDestroy, EditableCompone
   onHasUnsavedChanges($event: boolean) {
     this._hasUnsavedChanges = $event;
   }
+
+  emptyMetadataTable(): boolean {
+    if (this.appConfig.hideEmptyMetadataTable) {
+      return (
+        !!this.sample?.sampleCharacteristics &&
+        Object.keys(this.sample.sampleCharacteristics).length > 0
+      );
+    }
+    return true;
+  }
+
   ngOnDestroy() {
     this.subscriptions.forEach((subscription) => subscription.unsubscribe());
   }

@@ -1,7 +1,8 @@
 import { Pipe, PipeTransform } from "@angular/core";
 
 @Pipe({
-  name: "filePathTruncate"
+  name: "filePathTruncate",
+  standalone: false,
 })
 export class FilePathTruncate implements PipeTransform {
   transform(value: string): string {

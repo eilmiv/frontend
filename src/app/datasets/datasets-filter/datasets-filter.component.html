@@ -1,207 +1,93 @@
 <mat-card>
-  <div class="section-container">
-    <span class="title">Search</span>
-    <button
-      [disabled]="(hasAppliedFilters$ | async) === false"
-      mat-button
-      class="clear-button"
-      color="primary"
-      (click)="clearFacets()"
-    >
-      <mat-icon>clear_all</mat-icon> Clear
-    </button>
-    <div style="clear: both;"></div>
-  </div>
-
-  <app-search-bar
-    #searchBar
-    [prefilledValue]="searchTerms$ | async"
-    [placeholder]="'Text Search'"
-    [clear]="clearSearchBar"
-    (search)="textSearchChanged($event)"
-    (searchBarFocus)="textSearchChanged($event)"
-  >
-  </app-search-bar>
-
-  <mat-form-field>
-    <mat-chip-list #locationChipList>
-      <mat-chip
-        *ngFor="let location of locationFilter$ | async"
-        [removable]="true"
-        (removed)="locationRemoved(location)"
-        >{{ location || "No Location" }}
-        <mat-icon matChipRemove>cancel</mat-icon>
-      </mat-chip>
-    </mat-chip-list>
-    <input
-      (input)="onLocationInput($event)"
-      [value]="locationInput$ | async"
-      matInput
-      class="location-input"
-      [matChipInputFor]="locationChipList"
-      placeholder="Location"
-      aria-label="Location"
-      [matAutocomplete]="loc"
-    />
-
-    <mat-autocomplete #loc="matAutocomplete">
-      <mat-option
-        (onSelectionChange)="locationSelected(getFacetId(fc))"
-        *ngFor="let fc of locationSuggestions$ | async"
+  <mat-card-header class="section-container filters-header">
+    <mat-card-title>Filters</mat-card-title>
+    <div class="section-container" data-cy="more-filters-button">
+      <button
+        mat-icon-button
+        class="settings-button"
+        (click)="showDatasetsFilterSettingsDialog()"
+        matTooltip="Filter settings"
       >
-        <span>{{ getFacetId(fc, "No Location") }} | </span>
-        <small>{{ getFacetCount(fc) }}</small>
-      </mat-option>
-    </mat-autocomplete>
-  </mat-form-field>
+        <mat-icon>settings</mat-icon>
+      </button>
+    </div>
+  </mat-card-header>
 
-  <mat-form-field>
-    <mat-chip-list #groupChipList>
-      <mat-chip
-        *ngFor="let group of groupFilter$ | async"
-        [removable]="true"
-        (removed)="groupRemoved(group)"
-        >{{ group }}<mat-icon matChipRemove>cancel</mat-icon>
-      </mat-chip>
-    </mat-chip-list>
-    <input
-      (input)="onGroupInput($event)"
-      [value]="groupInput$ | async"
-      matInput
-      class="group-input"
-      [matChipInputFor]="groupChipList"
-      placeholder="Group"
-      aria-label="Group"
-      [matAutocomplete]="grp"
-    />
-
-    <mat-autocomplete #grp="matAutocomplete">
-      <mat-option
-        (onSelectionChange)="groupSelected(getFacetId(fc))"
-        *ngFor="let fc of groupSuggestions$ | async"
-      >
-        <span>{{ getFacetId(fc, "No Group") }}</span> |
-        <small>{{ getFacetCount(fc) }}</small>
-      </mat-option>
-    </mat-autocomplete>
-  </mat-form-field>
-
-  <mat-form-field>
-    <mat-chip-list #typeChipList>
-      <mat-chip
-        *ngFor="let type of typeFilter$ | async"
-        [removable]="true"
-        (removed)="typeRemoved(type)"
-        >{{ type }}<mat-icon matChipRemove>cancel</mat-icon>
-      </mat-chip>
-    </mat-chip-list>
-    <input
-      (input)="onKeywordInput($event)"
-      [value]="typeInput$ | async"
-      matInput
-      class="type-input"
-      [matChipInputFor]="typeChipList"
-      placeholder="Type"
-      aria-label="Type"
-      [matAutocomplete]="type"
-    />
-
-    <mat-autocomplete #type="matAutocomplete">
-      <mat-option
-        (onSelectionChange)="typeSelected(getFacetId(fc))"
-        *ngFor="let fc of typeSuggestions$ | async"
-      >
-        <span>{{ getFacetId(fc, "No Type") }}</span> |
-        <small>{{ getFacetCount(fc) }}</small>
-      </mat-option>
-    </mat-autocomplete>
-  </mat-form-field>
-
-  <mat-form-field>
-    <mat-chip-list #keywordChipList>
-      <mat-chip
-        *ngFor="let keyword of keywordsFilter$ | async"
-        [removable]="true"
-        (removed)="keywordRemoved(keyword)"
-        >{{ keyword }}<mat-icon matChipRemove>cancel</mat-icon>
-      </mat-chip>
-    </mat-chip-list>
-    <input
-      (input)="onKeywordInput($event)"
-      [value]="keywordsInput$ | async"
-      matInput
-      class="keyword-input"
-      [matChipInputFor]="keywordChipList"
-      placeholder="Keywords"
-      aria-label="Keywords"
-      [matAutocomplete]="kw"
-    />
-    <mat-autocomplete #kw="matAutocomplete">
-      <mat-option
-        (onSelectionChange)="keywordSelected(getFacetId(fc))"
-        *ngFor="let fc of keywordsSuggestions$ | async"
-      >
-        <span>{{ getFacetId(fc, "No Keywords") }}</span>
-        <small>: {{ getFacetCount(fc) }}</small>
-      </mat-option>
-    </mat-autocomplete>
-  </mat-form-field>
-
-  <mat-form-field>
-    <mat-date-range-input class="date-input" [rangePicker]="picker">
-      <input
-        matStartDate
-        name="begin"
-        [value]="(creationTimeFilter$ | async)?.begin"
-        (dateChange)="dateChanged($event)"
-        placeholder="Start Date"
-      />
-      <input
-        matEndDate
-        name="end"
-        [value]="(creationTimeFilter$ | async)?.end"
-        (dateChange)="dateChanged($event)"
-        placeholder="End Date"
-      />
-    </mat-date-range-input>
-    <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
-    <mat-date-range-picker #picker></mat-date-range-picker>
-  </mat-form-field>
-
-  <div class="section-container" *ngIf="appConfig.scienceSearchEnabled">
-    <button mat-button color="primary" (click)="showAddConditionDialog()">
-      <mat-icon>add</mat-icon> Add Condition
-    </button>
-
-    <mat-chip-list class="scientific-chips" aria-orientation="vertical">
-      <mat-chip
-        *ngFor="let condition of scientificConditions$ | async; index as i"
-      >
-        {{ condition.lhs }}
-        <ng-container [ngSwitch]="condition.relation">
-          <ng-container *ngSwitchCase="'EQUAL_TO_NUMERIC'">
-            &nbsp;=&nbsp;
-          </ng-container>
-          <ng-container *ngSwitchCase="'EQUAL_TO_STRING'">
-            &nbsp;=&nbsp;
-          </ng-container>
-          <ng-container *ngSwitchCase="'LESS_THAN'">
-            &nbsp;&lt;&nbsp;
-          </ng-container>
-          <ng-container *ngSwitchCase="'GREATER_THAN'">
-            &nbsp;&gt;&nbsp;
-          </ng-container>
-        </ng-container>
-        {{
-          condition.relation === "EQUAL_TO_STRING"
-            ? '"' + condition.rhs + '"'
-            : condition.rhs
-        }}
-        {{ condition.unit | prettyUnit }}
-        <mat-icon matChipRemove (click)="removeCondition(condition, i)"
-          >cancel</mat-icon
+  <mat-card-content>
+    <ng-template [ngIf]="this.loggedIn$ | async">
+      <div class="public-toggle">
+        <button
+          mat-stroked-button
+          [class.active]="
+            currentPublicViewMode === '' || currentPublicViewMode === false
+          "
+          (click)="onViewPublicChange(false)"
         >
-      </mat-chip>
-    </mat-chip-list>
-  </div>
+          My data
+        </button>
+        <button
+          mat-stroked-button
+          [class.active]="currentPublicViewMode === true"
+          (click)="onViewPublicChange(true)"
+        >
+          Public data
+        </button>
+      </div>
+    </ng-template>
+    <ng-container *ngFor="let filter of filtersList">
+      <shared-filter
+        [key]="filter.key"
+        [label]="filter.label"
+        [clear]="clearSearchBar"
+        [tooltip]="filter.description"
+        [filterType]="filter.type"
+        [prefilled]="activeFilters[filter.key] || null"
+        [currentFilter$]="getFilterByKey$(filter.key)"
+        [facetCounts$]="getFilterFacetCounts$(filter.key)"
+        (textChange)="setFilter(filter.key, $event)"
+        (dateRangeChange)="setDateFilter(filter.key, $event)"
+        (selectionChange)="selectionChange($event)"
+        (checkBoxChange)="setFilter(filter.key, $event)"
+        (numericRangeChange)="numericRangeChange(filter.key, $event)"
+        [filterValue]="activeFilters[filter.key]"
+        [collapsible]="filter.type === 'checkbox'"
+      ></shared-filter>
+    </ng-container>
+
+    <shared-condition
+      #conditionFilter
+      *ngIf="appConfig.scienceSearchEnabled"
+      data-cy="scientific-condition-filter-list"
+      [showConditions]="true"
+      [metadataKeys]="metadataKeys$ | async"
+      [unitsEnabled]="appConfig.scienceSearchUnitsEnabled"
+      [showConditionToggle]="true"
+      [conditionType]="'datasets'"
+      [addConditionAction]="addCondition"
+      [removeConditionAction]="removeCondition"
+    ></shared-condition>
+
+    <div class="section-container">
+      <button
+        [disabled]="(hasAppliedFilters$ | async) === false"
+        mat-raised-button
+        color="secondary"
+        class="datasets-filters-clear-all-button"
+        (click)="reset()"
+      >
+        <mat-icon>undo</mat-icon>
+        Clear
+      </button>
+      <button
+        mat-raised-button
+        color="primary"
+        class="datasets-filters-search-button"
+        data-cy="filter-search-button"
+        (click)="applyFilters()"
+      >
+        <mat-icon>search</mat-icon>
+        Apply
+      </button>
+    </div>
+  </mat-card-content>
 </mat-card>

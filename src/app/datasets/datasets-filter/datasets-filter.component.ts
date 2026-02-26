@@ -1,303 +1,377 @@
-import { Component, OnDestroy, OnInit } from "@angular/core";
+import { Component, OnDestroy, OnInit, ViewChild } from "@angular/core";
 import { MatDialog } from "@angular/material/dialog";
 import { Store } from "@ngrx/store";
+import { cloneDeep, isEqual } from "lodash-es";
 import {
-  debounceTime,
-  distinctUntilChanged,
-  skipWhile,
-  map,
-} from "rxjs/operators";
-
-import { FacetCount } from "state-management/state/datasets.store";
-import {
-  selectCreationTimeFilter,
-  selectGroupFacetCounts,
-  selectGroupFilter,
+  selectFacetCountByKey,
+  selectFilterByKey,
   selectHasAppliedFilters,
-  selectKeywordFacetCounts,
-  selectKeywordsFilter,
-  selectLocationFacetCounts,
-  selectLocationFilter,
-  selectScientificConditions,
-  selectSearchTerms,
-  selectTypeFacetCounts,
-  selectTypeFilter,
-  selectKeywordsTerms,
-  selectMetadataKeys,
+  selectPublicViewMode,
 } from "state-management/selectors/datasets.selectors";
-
+import { ScientificCondition } from "state-management/models";
 import {
-  setTextFilterAction,
-  addKeywordFilterAction,
-  setSearchTermsAction,
-  addLocationFilterAction,
-  removeLocationFilterAction,
-  addGroupFilterAction,
-  removeGroupFilterAction,
-  removeKeywordFilterAction,
-  addTypeFilterAction,
-  removeTypeFilterAction,
-  setDateRangeFilterAction,
+  addDatasetFilterAction,
   clearFacetsAction,
+  fetchDatasetsAction,
+  fetchFacetCountsAction,
+  removeDatasetFilterAction,
+  setFiltersAction,
+  setPublicViewModeAction,
+} from "state-management/actions/datasets.actions";
+import {
+  updateConditionsConfigs,
+  updateUserSettingsAction,
+} from "state-management/actions/user.actions";
+import { AppConfigService } from "app-config.service";
+import { DatasetsFilterSettingsComponent } from "./settings/datasets-filter-settings.component";
+import {
+  selectFilters,
+  selectIsLoggedIn,
+} from "state-management/selectors/user.selectors";
+import { AsyncPipe } from "@angular/common";
+import { Subscription } from "rxjs";
+import { selectMetadataKeys } from "state-management/selectors/datasets.selectors";
+import { FilterConfig } from "state-management/state/user.store";
+import { DateRange } from "state-management/state/proposals.store";
+import { ActivatedRoute, Router } from "@angular/router";
+import { MultiSelectFilterValue } from "shared/modules/filters/multiselect-filter.component";
+import { INumericRange } from "shared/modules/numeric-range/form/model/numeric-range-field.model";
+import { SharedConditionComponent } from "shared/modules/shared-condition/shared-condition.component";
+import {
   addScientificConditionAction,
   removeScientificConditionAction,
 } from "state-management/actions/datasets.actions";
-import { combineLatest, BehaviorSubject, Observable, Subscription } from "rxjs";
-import {
-  selectColumnAction,
-  deselectColumnAction,
-  deselectAllCustomColumnsAction,
-} from "state-management/actions/user.actions";
-import { ScientificCondition } from "state-management/models";
-import { SearchParametersDialogComponent } from "shared/modules/search-parameters-dialog/search-parameters-dialog.component";
-import { AsyncPipe } from "@angular/common";
-import { MatDatepickerInputEvent } from "@angular/material/datepicker";
-import { DateTime } from "luxon";
-import { AppConfigService } from "app-config.service";
-
-interface DateRange {
-  begin: string;
-  end: string;
-}
 @Component({
   selector: "datasets-filter",
   templateUrl: "datasets-filter.component.html",
   styleUrls: ["datasets-filter.component.scss"],
+  standalone: false,
 })
 export class DatasetsFilterComponent implements OnInit, OnDestroy {
   private subscriptions: Subscription[] = [];
+  activeFilters: Record<string, string | DateRange | string[] | INumericRange> =
+    {};
+  filtersList: FilterConfig[];
 
-  locationFacetCounts$ = this.store.select(selectLocationFacetCounts);
-  groupFacetCounts$ = this.store.select(selectGroupFacetCounts);
-  typeFacetCounts$ = this.store.select(selectTypeFacetCounts);
-  keywordFacetCounts$ = this.store.select(selectKeywordFacetCounts);
-
-  searchTerms$ = this.store.select(selectSearchTerms);
-  keywordsTerms$ = this.store.select(selectKeywordsTerms);
-  locationFilter$ = this.store.select(selectLocationFilter);
-  groupFilter$ = this.store.select(selectGroupFilter);
-  typeFilter$ = this.store.select(selectTypeFilter);
-  keywordsFilter$ = this.store.select(selectKeywordsFilter);
-  creationTimeFilter$ = this.store.select(selectCreationTimeFilter);
-  scientificConditions$ = this.store.select(selectScientificConditions);
-  metadataKeys$ = this.store.select(selectMetadataKeys);
-
-  locationInput$ = new BehaviorSubject<string>("");
-  groupInput$ = new BehaviorSubject<string>("");
-  typeInput$ = new BehaviorSubject<string>("");
-  keywordsInput$ = new BehaviorSubject<string>("");
+  filterConfigs$ = this.store.select(selectFilters);
 
   appConfig = this.appConfigService.getConfig();
 
   clearSearchBar = false;
-  groupSuggestions$ = this.createSuggestionObserver(
-    this.groupFacetCounts$,
-    this.groupInput$,
-    this.groupFilter$
-  );
-
-  locationSuggestions$ = this.createSuggestionObserver(
-    this.locationFacetCounts$,
-    this.locationInput$,
-    this.locationFilter$
-  );
-
-  typeSuggestions$ = this.createSuggestionObserver(
-    this.typeFacetCounts$,
-    this.typeInput$,
-    this.typeFilter$
-  );
-
-  keywordsSuggestions$ = this.createSuggestionObserver(
-    this.keywordFacetCounts$,
-    this.keywordsInput$,
-    this.keywordsFilter$
-  );
 
   hasAppliedFilters$ = this.store.select(selectHasAppliedFilters);
 
-  dateRange: DateRange = {
-    begin: "",
-    end: "",
-  };
+  metadataKeys$ = this.store.select(selectMetadataKeys);
+
+  @ViewChild("conditionFilter") conditionFilter: SharedConditionComponent;
+
+  loggedIn$ = this.store.select(selectIsLoggedIn);
+
+  currentPublicViewMode: boolean | "" = "";
+
+  humanNameMap: { [key: string]: string } = {};
+
+  fieldTypeMap: { [key: string]: string } = {};
+
+  hoverKey: string | null = null;
+
+  tempConditionValues: string[] = [];
 
   constructor(
-    public appConfigService: AppConfigService,
+    private store: Store,
     private asyncPipe: AsyncPipe,
+    private route: ActivatedRoute,
+    private router: Router,
+    public appConfigService: AppConfigService,
     public dialog: MatDialog,
-    private store: Store
   ) {}
 
-  createSuggestionObserver(
-    facetCounts$: Observable<FacetCount[]>,
-    input$: BehaviorSubject<string>,
-    currentFilters$: Observable<string[]>
-  ): Observable<FacetCount[]> {
-    return combineLatest([facetCounts$, input$, currentFilters$]).pipe(
-      map(([counts, filterString, currentFilters]) => {
-        if (!counts) {
-          return [];
-        }
-        return counts.filter(
-          (count) =>
-            typeof count._id === "string" &&
-            count._id.toLowerCase().includes(filterString.toLowerCase()) &&
-            currentFilters.indexOf(count._id) < 0
-        );
-      })
-    );
-  }
+  addCondition = (condition: ScientificCondition) => {
+    this.store.dispatch(addScientificConditionAction({ condition }));
+  };
 
-  getFacetId(facetCount: FacetCount, fallback = ""): string {
-    const id = facetCount._id;
-    return id ? String(id) : fallback;
-  }
-
-  getFacetCount(facetCount: FacetCount): number {
-    return facetCount.count;
-  }
-
-  textSearchChanged(terms: string) {
-    if ("string" != typeof terms) return;
-    this.clearSearchBar = false;
-    this.store.dispatch(setSearchTermsAction({ terms }));
-  }
-
-  onLocationInput(event: any) {
-    const value = (<HTMLInputElement>event.target).value;
-    this.locationInput$.next(value);
-  }
-
-  onGroupInput(event: any) {
-    const value = (<HTMLInputElement>event.target).value;
-    this.groupInput$.next(value);
-  }
-
-  onKeywordInput(event: any) {
-    const value = (<HTMLInputElement>event.target).value;
-    this.keywordsInput$.next(value);
-  }
-
-  onTypeInput(event: any) {
-    const value = (<HTMLInputElement>event.target).value;
-    this.typeInput$.next(value);
-  }
-
-  locationSelected(location: string | null) {
-    const loc = location || "";
-    this.store.dispatch(addLocationFilterAction({ location: loc }));
-    this.locationInput$.next("");
-  }
-
-  locationRemoved(location: string) {
-    this.store.dispatch(removeLocationFilterAction({ location }));
-  }
-
-  groupSelected(group: string) {
-    this.store.dispatch(addGroupFilterAction({ group }));
-    this.groupInput$.next("");
-  }
-
-  groupRemoved(group: string) {
-    this.store.dispatch(removeGroupFilterAction({ group }));
-  }
-
-  keywordSelected(keyword: string) {
-    this.store.dispatch(addKeywordFilterAction({ keyword }));
-    this.keywordsInput$.next("");
-  }
-
-  keywordRemoved(keyword: string) {
-    this.store.dispatch(removeKeywordFilterAction({ keyword }));
-  }
-
-  typeSelected(type: string) {
-    this.store.dispatch(addTypeFilterAction({ datasetType: type }));
-    this.typeInput$.next("");
-  }
-
-  typeRemoved(type: string) {
-    this.store.dispatch(removeTypeFilterAction({ datasetType: type }));
-  }
-
-  dateChanged(event: MatDatepickerInputEvent<DateTime>) {
-    if (event.value) {
-      const name = event.targetElement.getAttribute("name");
-      if (name === "begin") {
-        this.dateRange.begin = event.value.toUTC().toISO();
-        this.dateRange.end = "";
-      }
-      if (name === "end") {
-        this.dateRange.end = event.value.toUTC().plus({ days: 1 }).toISO();
-      }
-      if (this.dateRange.begin.length > 0 && this.dateRange.end.length > 0) {
-        this.store.dispatch(setDateRangeFilterAction(this.dateRange));
-      }
-    } else {
-      this.store.dispatch(setDateRangeFilterAction({ begin: "", end: "" }));
-    }
-  }
-
-  clearFacets() {
-    this.clearSearchBar = true;
-    this.dateRange = {
-      begin: "",
-      end: "",
-    };
-    this.store.dispatch(clearFacetsAction());
-    this.store.dispatch(deselectAllCustomColumnsAction());
-  }
-
-  showAddConditionDialog() {
-    this.dialog
-      .open(SearchParametersDialogComponent, {
-        data: { parameterKeys: this.asyncPipe.transform(this.metadataKeys$) },
-      })
-      .afterClosed()
-      .subscribe((res) => {
-        if (res) {
-          const { data } = res;
-          this.store.dispatch(
-            addScientificConditionAction({ condition: data })
-          );
-          this.store.dispatch(
-            selectColumnAction({ name: data.lhs, columnType: "custom" })
-          );
-        }
-      });
-  }
-
-  removeCondition(condition: ScientificCondition, index: number) {
-    this.store.dispatch(removeScientificConditionAction({ index }));
-    this.store.dispatch(
-      deselectColumnAction({ name: condition.lhs, columnType: "custom" })
-    );
-  }
+  removeCondition = (condition: ScientificCondition) => {
+    this.store.dispatch(removeScientificConditionAction({ condition }));
+  };
 
   ngOnInit() {
     this.subscriptions.push(
-      this.searchTerms$
-        .pipe(
-          skipWhile((terms) => terms === ""),
-          debounceTime(500),
-          distinctUntilChanged()
-        )
-        .subscribe((terms) => {
-          this.store.dispatch(setTextFilterAction({ text: terms }));
-        })
+      this.filterConfigs$.subscribe((filterConfigs) => {
+        if (filterConfigs) {
+          this.filtersList = filterConfigs;
+
+          const { queryParams } = this.route.snapshot;
+
+          const searchQuery = JSON.parse(queryParams.searchQuery || "{}");
+
+          this.filtersList.forEach((filter) => {
+            // Apply default filter type from app config if available
+            // This is to handle the case when site admin changed the filter type
+            // whereas user settings still have the old filter type
+            this.appConfig.defaultDatasetsListSettings?.filters?.forEach(
+              (defaultFilter) => {
+                if (filter.key === defaultFilter.key) {
+                  filter.type = defaultFilter.type;
+                }
+              },
+            );
+            if (!filter.enabled && searchQuery[filter.key]) {
+              delete searchQuery[filter.key];
+              delete this.activeFilters[filter.key];
+            }
+          });
+
+          this.router.navigate([], {
+            queryParams: {
+              searchQuery: JSON.stringify(searchQuery),
+            },
+            queryParamsHandling: "merge",
+          });
+        }
+      }),
+    );
+
+    const { queryParams } = this.route.snapshot;
+
+    const searchQuery = JSON.parse(queryParams.searchQuery || "{}");
+    this.activeFilters = { ...searchQuery };
+
+    this.store.dispatch(
+      setFiltersAction({ datasetFilters: this.activeFilters }),
     );
 
     this.subscriptions.push(
-      this.keywordsTerms$
-        .pipe(
-          skipWhile((terms) => terms === ""),
-          debounceTime(500),
-          distinctUntilChanged()
-        )
-        .subscribe((terms) => {
-          this.store.dispatch(addKeywordFilterAction({ keyword: terms }));
-        })
+      this.store.select(selectPublicViewMode).subscribe((publicViewMode) => {
+        this.currentPublicViewMode = publicViewMode;
+      }),
     );
+  }
+
+  onViewPublicChange(value: boolean) {
+    this.currentPublicViewMode = value;
+
+    this.store.dispatch(
+      setPublicViewModeAction({ isPublished: this.currentPublicViewMode }),
+    );
+
+    this.store.dispatch(fetchDatasetsAction());
+    this.store.dispatch(fetchFacetCountsAction());
+  }
+
+  reset() {
+    this.clearSearchBar = true;
+
+    this.store.dispatch(clearFacetsAction());
+    this.store.dispatch(
+      updateConditionsConfigs({
+        conditionConfigs: [],
+      }),
+    );
+    this.store.dispatch(
+      updateUserSettingsAction({
+        property: { conditions: [] },
+      }),
+    );
+
+    this.activeFilters = {};
+
+    this.applyFilters();
+    // we need to treat JS event loop here, otherwise this.clearSearchBar is false for the components
+    setTimeout(() => {
+      this.clearSearchBar = false; // reset value so it will be triggered again
+    }, 0);
+  }
+
+  async showDatasetsFilterSettingsDialog() {
+    // Get initial filter and condition configs
+    // to compare with the updated ones
+    // and dispatch the updated ones if they changed
+    // This is to prevent unnecessary API calls
+    const initialFilterConfigsCopy = cloneDeep(
+      this.asyncPipe.transform(this.filterConfigs$),
+    );
+
+    const dialogRef = this.dialog.open(DatasetsFilterSettingsComponent, {
+      data: {
+        filterConfigs: this.filtersList,
+      },
+      restoreFocus: false,
+    });
+
+    dialogRef.afterClosed().subscribe((result) => {
+      if (result) {
+        const filtersChanged = !isEqual(
+          initialFilterConfigsCopy,
+          result.filterConfigs,
+        );
+
+        if (filtersChanged) {
+          this.store.dispatch(
+            updateUserSettingsAction({
+              property: { filters: result.filterConfigs },
+            }),
+          );
+
+          this.store.dispatch(fetchFacetCountsAction());
+        }
+      }
+    });
+  }
+
+  applyFilters() {
+    const { queryParams } = this.route.snapshot;
+    const searchQuery = JSON.parse(queryParams.searchQuery || "{}");
+
+    if (
+      this.activeFilters.creationTime &&
+      !this.activeFilters.creationTime["end"]
+    ) {
+      this.activeFilters.creationTime["end"] = new Date().toISOString();
+    }
+    this.router.navigate([], {
+      queryParams: {
+        searchQuery: JSON.stringify({
+          ...this.activeFilters,
+          text: searchQuery.text,
+        }),
+      },
+      queryParamsHandling: "merge",
+    });
+
+    if (this.conditionFilter) {
+      this.conditionFilter.applyConditions();
+    }
+
+    this.store.dispatch(fetchDatasetsAction());
+    this.store.dispatch(fetchFacetCountsAction());
+  }
+
+  setDateFilter(filterKey: string, value: DateRange) {
+    if (value.begin || value.end) {
+      this.activeFilters[filterKey] = {
+        begin: value.begin,
+        end: value.end,
+      };
+
+      this.store.dispatch(
+        addDatasetFilterAction({
+          key: filterKey,
+          value: this.activeFilters[filterKey],
+          filterType: "dateRange",
+        }),
+      );
+    } else {
+      delete this.activeFilters[filterKey];
+
+      this.store.dispatch(
+        removeDatasetFilterAction({
+          key: filterKey,
+          filterType: "dateRange",
+        }),
+      );
+    }
+  }
+
+  setFilter(filterKey: string, value: string | string[]) {
+    if (value) {
+      this.activeFilters[filterKey] = value;
+
+      this.store.dispatch(
+        addDatasetFilterAction({
+          key: filterKey,
+          value: this.activeFilters[filterKey],
+          filterType: "text",
+        }),
+      );
+    } else {
+      delete this.activeFilters[filterKey];
+
+      this.store.dispatch(
+        removeDatasetFilterAction({
+          key: filterKey,
+          filterType: "text",
+        }),
+      );
+    }
+
+    // Auto-trigger for array values or checkbox filter
+    // This applies to both multiselect type and checkBoxFilter
+    // skip PID text input to avoid triggering on keystrokes
+    // Array check can be removed when we remove text input filter type
+    if (Array.isArray(value) && this.appConfig.checkBoxFilterClickTrigger) {
+      this.applyFilters();
+    }
+  }
+
+  addMultiSelectFilterToActiveFilters(key: string, value: string) {
+    if (this.activeFilters[key] && Array.isArray(this.activeFilters[key])) {
+      if (!this.activeFilters[key].includes(value)) {
+        this.activeFilters[key] = [...this.activeFilters[key], value];
+      }
+      // If value already exists, do nothing
+    } else {
+      this.activeFilters[key] = [value];
+    }
+  }
+
+  removeMultiSelectFilterFromActiveFilters(key: string, value: string) {
+    if (this.activeFilters[key] && Array.isArray(this.activeFilters[key])) {
+      if (this.activeFilters[key].length > 1) {
+        this.activeFilters[key] = this.activeFilters[key].filter(
+          (item: string) => item !== value,
+        );
+      } else {
+        delete this.activeFilters[key];
+      }
+    }
+  }
+
+  selectionChange({ event, key, value }: MultiSelectFilterValue) {
+    if (event === "add") {
+      this.addMultiSelectFilterToActiveFilters(key, value._id);
+      this.store.dispatch(
+        addDatasetFilterAction({
+          key,
+          value: value._id,
+          filterType: "multiSelect",
+        }),
+      );
+    } else {
+      this.removeMultiSelectFilterFromActiveFilters(key, value._id);
+      this.store.dispatch(
+        removeDatasetFilterAction({
+          key,
+          value: value._id,
+          filterType: "multiSelect",
+        }),
+      );
+    }
+  }
+
+  numericRangeChange(filterKey: string, { min, max }: INumericRange) {
+    if (min !== null || max !== null) {
+      this.activeFilters[filterKey] = { min, max };
+      this.store.dispatch(
+        addDatasetFilterAction({
+          key: filterKey,
+          value: this.activeFilters[filterKey],
+          filterType: "number",
+        }),
+      );
+    } else {
+      delete this.activeFilters[filterKey];
+      this.store.dispatch(
+        removeDatasetFilterAction({ key: filterKey, filterType: "number" }),
+      );
+    }
+  }
+
+  getFilterFacetCounts$(key: string) {
+    return this.store.select(selectFacetCountByKey(key));
+  }
+
+  getFilterByKey$(key: string) {
+    return this.store.select(selectFilterByKey(key));
   }
 
   ngOnDestroy() {

@@ -1,14 +1,16 @@
 import { Injectable } from "@angular/core";
-import { Actions, ofType, createEffect, concatLatestFrom } from "@ngrx/effects";
+import { Actions, ofType, createEffect } from "@ngrx/effects";
+import { concatLatestFrom } from "@ngrx/operators";
 import { ADAuthService } from "users/adauth.service";
+import { AuthService, SDKToken } from "shared/services/auth/auth.service";
 import {
-  LoopBackAuth,
-  UserApi,
-  UserIdentityApi,
-  SDKToken,
-  User,
-  UserIdentity,
-} from "shared/sdk";
+  ReturnedUserDto,
+  UsersService,
+  AuthService as SharedAuthService,
+  UserSettings,
+  Configuration,
+  UserIdentitiesService,
+} from "@scicatproject/scicat-sdk-ts-angular";
 import { Router } from "@angular/router";
 import * as fromActions from "state-management/actions/user.actions";
 import {
@@ -20,6 +22,7 @@ import {
   distinctUntilChanged,
   mergeMap,
   takeWhile,
+  concatMap,
 } from "rxjs/operators";
 import { of } from "rxjs";
 import { MessageType } from "state-management/models";
@@ -27,8 +30,10 @@ import { Store } from "@ngrx/store";
 import {
   selectColumns,
   selectCurrentUser,
+  selectConditions,
 } from "state-management/selectors/user.selectors";
 import {
+  addScientificConditionAction,
   clearDatasetsStateAction,
   setDatasetsLimitFilterAction,
 } from "state-management/actions/datasets.actions";
@@ -44,6 +49,8 @@ import { clearPublishedDataStateAction } from "state-management/actions/publishe
 import { clearSamplesStateAction } from "state-management/actions/samples.actions";
 import { HttpErrorResponse } from "@angular/common/http";
 import { AppConfigService } from "app-config.service";
+import { selectColumnAction } from "state-management/actions/user.actions";
+import { initialUserState } from "state-management/state/user.store";
 
 @Injectable()
 export class UserEffects {
@@ -55,32 +62,25 @@ export class UserEffects {
       ofType(fromActions.loginAction),
       map((action) => action.form),
       map(({ username, password, rememberMe }) =>
-        fromActions.activeDirLoginAction({ username, password, rememberMe })
-      )
+        fromActions.activeDirLoginAction({ username, password, rememberMe }),
+      ),
     );
   });
 
   adLogin$ = createEffect(() => {
     return this.actions$.pipe(
       ofType(fromActions.activeDirLoginAction),
-      switchMap(({ username, password, rememberMe }) =>
+      switchMap(({ username, password }) =>
         this.activeDirAuthService.login(username, password).pipe(
           switchMap(({ body }) => [
             fromActions.activeDirLoginSuccessAction(),
             fromActions.fetchUserAction({ adLoginResponse: body }),
           ]),
-          catchError((error: HttpErrorResponse) =>
-            of(
-              fromActions.activeDirLoginFailedAction({
-                username,
-                password,
-                rememberMe,
-                error,
-              })
-            )
-          )
-        )
-      )
+          catchError((error: HttpErrorResponse) => {
+            return of(fromActions.activeDirLoginFailedAction({ error }));
+          }),
+        ),
+      ),
     );
   });
 
@@ -88,79 +88,96 @@ export class UserEffects {
     return this.actions$.pipe(
       ofType(fromActions.loginOIDCAction),
       switchMap(({ oidcLoginResponse }) => {
-        const accessTokenPrefix =
-          this.configService.getConfig().accessTokenPrefix;
         const token = new SDKToken({
-          id: accessTokenPrefix + oidcLoginResponse.accessToken,
+          id: oidcLoginResponse.accessToken,
           userId: oidcLoginResponse.userId,
+          ttl: oidcLoginResponse.ttl,
+          created: oidcLoginResponse.created,
         });
-        this.loopBackAuth.setToken(token);
-        return this.userApi.findById<User>(oidcLoginResponse.userId).pipe(
-          switchMap((user: User) => [
-            fromActions.fetchUserCompleteAction(),
-            fromActions.loginCompleteAction({
-              user,
-              accountType: "external",
-            }),
-          ]),
-          catchError((error: HttpErrorResponse) =>
-            of(fromActions.fetchUserFailedAction({ error }))
-          )
-        );
-      })
+        this.authService.setToken(token);
+        this.apiConfigService.accessToken = token.id;
+        this.apiConfigService.credentials.bearer = token.id;
+        return this.usersService
+          .usersControllerFindByIdV3(oidcLoginResponse.userId)
+          .pipe(
+            switchMap((user: ReturnedUserDto) => [
+              fromActions.fetchUserCompleteAction(),
+              fromActions.loginCompleteAction({
+                user,
+                accountType: "external",
+              }),
+            ]),
+            catchError((error: HttpErrorResponse) =>
+              of(fromActions.fetchUserFailedAction({ error })),
+            ),
+          );
+      }),
     );
   });
+
   fetchUser$ = createEffect(() => {
     return this.actions$.pipe(
       ofType(fromActions.fetchUserAction),
       switchMap(({ adLoginResponse }) => {
-        const accessTokenPrefix =
-          this.configService.getConfig().accessTokenPrefix;
         const token = new SDKToken({
-          id: accessTokenPrefix + adLoginResponse.access_token,
+          id: adLoginResponse.access_token,
           userId: adLoginResponse.userId,
+          ttl: adLoginResponse.ttl,
+          created: adLoginResponse.created,
         });
-        this.loopBackAuth.setToken(token);
-        return this.userApi.findById<User>(adLoginResponse.userId).pipe(
-          switchMap((user: User) => [
-            fromActions.fetchUserCompleteAction(),
-            fromActions.loginCompleteAction({
-              user,
-              accountType: "external",
-            }),
-          ]),
-          catchError((error: HttpErrorResponse) =>
-            of(fromActions.fetchUserFailedAction({ error }))
-          )
-        );
-      })
-    );
-  });
-
-  loginRedirect$ = createEffect(() => {
-    return this.actions$.pipe(
-      ofType(fromActions.activeDirLoginFailedAction),
-      map(({ username, password, rememberMe, error }) =>
-        fromActions.funcLoginAction({ username, password, rememberMe, error })
-      )
+        this.authService.setToken(token);
+        this.apiConfigService.accessToken = token.id;
+        this.apiConfigService.credentials.bearer = token.id;
+        return this.usersService
+          .usersControllerFindByIdV3(adLoginResponse.userId)
+          .pipe(
+            switchMap((user: ReturnedUserDto) => [
+              fromActions.fetchUserCompleteAction(),
+              fromActions.loginCompleteAction({
+                user,
+                accountType: "external",
+              }),
+              fromActions.fetchUserIdentityAction({ id: user.id }),
+              fromActions.fetchUserSettingsAction({ id: user.id }),
+            ]),
+            catchError((error: HttpErrorResponse) =>
+              of(fromActions.fetchUserFailedAction({ error })),
+            ),
+          );
+      }),
     );
   });
 
   funcLogin$ = createEffect(() => {
     return this.actions$.pipe(
       ofType(fromActions.funcLoginAction),
-      switchMap(({ username, password, rememberMe, error }) =>
-        this.userApi.login({ username, password, rememberMe }).pipe(
-          switchMap(({ user }) => [
-            fromActions.funcLoginSuccessAction(),
-            fromActions.loginCompleteAction({
-              user,
-              accountType: "functional",
+      map((action) => action.form),
+      switchMap(({ username, password, rememberMe }) =>
+        this.sharedAuthService
+          .authControllerLoginV3({ username, password })
+          .pipe(
+            switchMap((loginResponse) => {
+              this.apiConfigService.accessToken = loginResponse.access_token;
+              this.apiConfigService.credentials.bearer =
+                loginResponse.access_token;
+              this.authService.setToken({
+                ...loginResponse,
+                rememberMe,
+                scopes: null,
+              });
+              return [
+                fromActions.funcLoginSuccessAction(),
+                fromActions.loginCompleteAction({
+                  user: loginResponse.user,
+                  accountType: "functional",
+                }),
+              ];
             }),
-          ]),
-          catchError(() => of(fromActions.funcLoginFailedAction({ error })))
-        )
-      )
+            catchError((error: HttpErrorResponse) => {
+              return of(fromActions.funcLoginFailedAction({ error }));
+            }),
+          ),
+      ),
     );
   });
 
@@ -168,9 +185,12 @@ export class UserEffects {
     return this.actions$.pipe(
       ofType(
         fromActions.fetchUserFailedAction,
-        fromActions.funcLoginFailedAction
+        fromActions.funcLoginFailedAction,
+        fromActions.activeDirLoginFailedAction,
       ),
-      map(({ error }) => fromActions.loginFailedAction({ error }))
+      map((error) => {
+        return fromActions.loginFailedAction(error);
+      }),
     );
   });
 
@@ -195,17 +215,18 @@ export class UserEffects {
             duration: 5000,
           },
         });
-      })
+      }),
     );
   });
 
   logout$ = createEffect(() => {
     return this.actions$.pipe(
       ofType(fromActions.logoutAction),
-      filter(() => this.userApi.isAuthenticated()),
-      switchMap(() =>
-        this.userApi.logout().pipe(
-          switchMap(() => [
+      filter(() => this.authService.isAuthenticated()),
+      switchMap(() => {
+        this.authService.clear();
+        return this.sharedAuthService.authControllerLogoutV3().pipe(
+          switchMap(({ logoutURL }) => [
             clearDatasetsStateAction(),
             clearInstrumentsStateAction(),
             clearJobsStateAction(),
@@ -214,11 +235,11 @@ export class UserEffects {
             clearProposalsStateAction(),
             clearPublishedDataStateAction(),
             clearSamplesStateAction(),
-            fromActions.logoutCompleteAction(),
+            fromActions.logoutCompleteAction({ logoutURL }),
           ]),
-          catchError(() => of(fromActions.logoutFailedAction()))
-        )
-      )
+          catchError(() => of(fromActions.logoutFailedAction())),
+        );
+      }),
     );
   });
 
@@ -226,25 +247,54 @@ export class UserEffects {
     () => {
       return this.actions$.pipe(
         ofType(fromActions.logoutCompleteAction),
-        tap(() => this.router.navigate([""]))
+        tap(({ logoutURL }) => {
+          this.apiConfigService.accessToken = null;
+          this.apiConfigService.credentials.bearer = null;
+          if (logoutURL) {
+            window.location.href = logoutURL;
+
+            return null;
+          } else {
+            return this.router.navigate(["/login"]);
+          }
+        }),
       );
     },
-    { dispatch: false }
+    { dispatch: false },
   );
 
   fetchCurrentUser$ = createEffect(() => {
     return this.actions$.pipe(
       ofType(fromActions.fetchCurrentUserAction),
+      filter(() => {
+        const { created, ttl, id } = this.authService.getToken();
+
+        const currentTimeStamp = Math.floor(new Date().getTime());
+        const createdTimeStamp = Math.floor(new Date(created).getTime());
+        const expirationTimeStamp = +createdTimeStamp + +ttl * 1000;
+        const isTokenExpired = currentTimeStamp >= expirationTimeStamp;
+
+        if (id && ttl && isTokenExpired) {
+          this.authService.clear();
+          this.apiConfigService.accessToken = null;
+          this.apiConfigService.credentials.bearer = null;
+          if (!(window as any).__karma__) {
+            window.location.reload();
+          }
+        }
+
+        return this.authService.isAuthenticated();
+      }),
       switchMap(() =>
-        this.userApi.getCurrent().pipe(
-          switchMap((user) => [
+        this.usersService.usersControllerGetMyUserV3().pipe(
+          switchMap((user: ReturnedUserDto) => [
             fromActions.fetchCurrentUserCompleteAction({ user }),
             fromActions.fetchUserIdentityAction({ id: user.id }),
             fromActions.fetchUserSettingsAction({ id: user.id }),
           ]),
-          catchError(() => of(fromActions.fetchCurrentUserFailedAction()))
-        )
-      )
+          catchError(() => of(fromActions.fetchCurrentUserFailedAction())),
+        ),
+      ),
     );
   });
 
@@ -252,15 +302,19 @@ export class UserEffects {
     return this.actions$.pipe(
       ofType(fromActions.fetchUserIdentityAction),
       switchMap(({ id }) =>
-        this.userIdentityApi
-          .findOne<UserIdentity>({ where: { userId: id } })
-          .pipe(
-            map((userIdentity: UserIdentity) =>
-              fromActions.fetchUserIdentityCompleteAction({ userIdentity })
-            ),
-            catchError(() => of(fromActions.fetchUserIdentityFailedAction()))
+        this.userIdentityService
+          .userIdentitiesControllerFindOneV3(
+            JSON.stringify({
+              where: { userId: id },
+            }),
           )
-      )
+          .pipe(
+            map((userIdentity) =>
+              fromActions.fetchUserIdentityCompleteAction({ userIdentity }),
+            ),
+            catchError(() => of(fromActions.fetchUserIdentityFailedAction())),
+          ),
+      ),
     );
   });
 
@@ -268,13 +322,36 @@ export class UserEffects {
     return this.actions$.pipe(
       ofType(fromActions.fetchUserSettingsAction),
       switchMap(({ id }) =>
-        this.userApi.getSettings(id, null).pipe(
-          map((userSettings) =>
-            fromActions.fetchUserSettingsCompleteAction({ userSettings })
-          ),
-          catchError(() => of(fromActions.fetchUserSettingsFailedAction()))
-        )
-      )
+        this.usersService.usersControllerGetSettingsV3(id, null).pipe(
+          map((userSettings: UserSettings) => {
+            const config = this.configService.getConfig();
+            const externalSettings = userSettings.externalSettings || {};
+
+            const settingsToCheck = ["columns", "conditions", "filters"];
+
+            for (const setting of settingsToCheck) {
+              let items = [];
+
+              if (Array.isArray(externalSettings[setting])) {
+                items = externalSettings[setting];
+              }
+
+              if (items.length < 1) {
+                items =
+                  config.defaultDatasetsListSettings[setting] ||
+                  initialUserState[setting];
+              }
+
+              userSettings[setting] = items;
+            }
+
+            return fromActions.fetchUserSettingsCompleteAction({
+              userSettings,
+            });
+          }),
+          catchError(() => of(fromActions.fetchUserSettingsFailedAction())),
+        ),
+      ),
     );
   });
 
@@ -284,7 +361,50 @@ export class UserEffects {
       mergeMap(({ userSettings }) => [
         setDatasetsLimitFilterAction({ limit: userSettings.datasetCount }),
         setJobsLimitFilterAction({ limit: userSettings.jobCount }),
-      ])
+      ]),
+    );
+  });
+
+  setFilters$ = createEffect(() => {
+    return this.actions$.pipe(
+      ofType(fromActions.fetchUserSettingsCompleteAction),
+      mergeMap(({ userSettings }) => [
+        fromActions.updateFilterConfigs({
+          filterConfigs: (userSettings as any).filters,
+        }),
+      ]),
+    );
+  });
+
+  setConditions$ = createEffect(() => {
+    return this.actions$.pipe(
+      ofType(fromActions.fetchUserSettingsCompleteAction),
+      mergeMap(({ userSettings }) => {
+        const actions = [];
+
+        // TODO: Check with the types here. This is working better as it is now with the conditions and filters. We are leaving it for now as it was from before.
+        (userSettings as any).conditions
+          .filter((condition) => condition.enabled)
+          .forEach((condition) => {
+            actions.push(
+              addScientificConditionAction({ condition: condition.condition }),
+            );
+            actions.push(
+              selectColumnAction({
+                name: condition.condition.lhs,
+                columnType: "custom",
+              }),
+            );
+          });
+
+        actions.push(
+          fromActions.updateConditionsConfigs({
+            conditionConfigs: (userSettings as any).conditions,
+          }),
+        );
+
+        return actions;
+      }),
     );
   });
 
@@ -293,39 +413,83 @@ export class UserEffects {
       ofType(fromActions.addCustomColumnsAction),
       concatLatestFrom(() => this.columns$),
       distinctUntilChanged(),
-      map(() => fromActions.addCustomColumnsCompleteAction())
+      map(() => fromActions.addCustomColumnsCompleteAction()),
     );
   });
 
   updateUserColumns$ = createEffect(() => {
     return this.actions$.pipe(
-      ofType(
-        fromActions.selectColumnAction,
-        fromActions.deselectColumnAction,
-        fromActions.deselectAllCustomColumnsAction,
-        fromActions.addCustomColumnsCompleteAction
-      ),
+      ofType(fromActions.selectColumnAction, fromActions.deselectColumnAction),
       concatLatestFrom(() => this.columns$),
       map(([action, columns]) => columns),
+      distinctUntilChanged(
+        (prevColumns, currColumns) =>
+          JSON.stringify(prevColumns) === JSON.stringify(currColumns),
+      ),
       map((columns) =>
-        fromActions.updateUserSettingsAction({ property: { columns } })
-      )
+        fromActions.updateUserSettingsAction({
+          property: { columns },
+        }),
+      ),
     );
   });
 
   updateUserSettings$ = createEffect(() => {
     return this.actions$.pipe(
       ofType(fromActions.updateUserSettingsAction),
-      concatLatestFrom(() => this.user$),
+      concatLatestFrom(() => [this.user$]),
       takeWhile(([action, user]) => !!user),
-      switchMap(([{ property }, user]) =>
-        this.userApi.updateSettings(user?.id, property).pipe(
-          map((userSettings) =>
-            fromActions.updateUserSettingsCompleteAction({ userSettings })
-          ),
-          catchError(() => of(fromActions.updateUserSettingsFailedAction()))
-        )
-      )
+      switchMap(([{ property }, user]) => {
+        const settingsToNest = [
+          "columns",
+          "conditions",
+          "filters",
+          "tablesSettings",
+        ];
+        const propertyKeys = Object.keys(property);
+        const newProperty = {};
+        let useExternalSettings = false;
+
+        propertyKeys.forEach((key) => {
+          if (settingsToNest.includes(key)) {
+            useExternalSettings = true;
+          }
+          newProperty[key] = property[key];
+        });
+
+        // NOTE:
+        // - datasetCount and jobCount are updated using the partialUpdateSettings API,
+        //   which applies validation according to the updateSettingsDTO rules.
+        // - All other properties (like columns, conditions, and filters) are updated
+        //   using the partialUpdateExternalSettings API, which does not enforce validation.
+
+        const apiCall$ = useExternalSettings
+          ? this.usersService.usersControllerPatchExternalSettingsV3(
+              user?.id,
+              JSON.stringify(newProperty) as any,
+            )
+          : this.usersService.usersControllerPatchSettingsV3(
+              user?.id,
+              JSON.stringify(newProperty) as any,
+            );
+        return apiCall$.pipe(
+          map((userSettings: UserSettings) => {
+            userSettings["conditions"] = (
+              userSettings.externalSettings as any
+            ).conditions;
+            userSettings["filters"] = (
+              userSettings.externalSettings as any
+            ).filters;
+            userSettings["columns"] = (
+              userSettings.externalSettings as any
+            ).columns;
+            return fromActions.updateUserSettingsCompleteAction({
+              userSettings,
+            });
+          }),
+          catchError(() => of(fromActions.updateUserSettingsFailedAction())),
+        );
+      }),
     );
   });
 
@@ -333,13 +497,63 @@ export class UserEffects {
     return this.actions$.pipe(
       ofType(fromActions.fetchScicatTokenAction),
       switchMap(() =>
-        of(this.userApi.getCurrentToken()).pipe(
-          map((token) =>
-            fromActions.fetchScicatTokenCompleteAction({ token })
-          ),
-          catchError(() => of(fromActions.fetchScicatTokenFailedAction()))
-        )
-      )
+        of(this.authService.getToken()).pipe(
+          map((token) => fromActions.fetchScicatTokenCompleteAction({ token })),
+          catchError(() => of(fromActions.fetchScicatTokenFailedAction())),
+        ),
+      ),
+    );
+  });
+
+  loadDefaultSettings$ = createEffect(() => {
+    return this.actions$.pipe(
+      ofType(fromActions.loadDefaultSettings),
+      concatLatestFrom(() => this.store.select(selectConditions)),
+      map(([{ config }, existingConditions]) => {
+        const defaultFilters =
+          config.defaultDatasetsListSettings.filters ||
+          initialUserState.filters;
+        const defaultConditions =
+          config.defaultDatasetsListSettings.conditions ||
+          initialUserState.conditions;
+
+        // NOTE: config.localColumns is for backward compatibility.
+        //       it should be removed once no longer needed
+        const columns =
+          config.defaultDatasetsListSettings.columns ||
+          config.localColumns ||
+          initialUserState.columns;
+        const isAuthenticated = this.authService.isAuthenticated();
+
+        const actions = [];
+
+        if (!existingConditions || existingConditions.length === 0) {
+          actions.push(
+            fromActions.updateConditionsConfigs({
+              conditionConfigs: defaultConditions,
+            }),
+          );
+        }
+
+        actions.push(
+          fromActions.updateHasFetchedSettings({
+            hasFetchedSettings: !isAuthenticated,
+          }),
+        );
+
+        actions.push(
+          fromActions.updateFilterConfigs({ filterConfigs: defaultFilters }),
+        );
+
+        actions.push(
+          fromActions.setDatasetTableColumnsAction({
+            columns,
+          }),
+        );
+
+        return actions;
+      }),
+      concatMap((actions) => actions),
     );
   });
 
@@ -347,10 +561,12 @@ export class UserEffects {
     private actions$: Actions,
     private activeDirAuthService: ADAuthService,
     private configService: AppConfigService,
-    private loopBackAuth: LoopBackAuth,
+    private apiConfigService: Configuration,
+    private authService: AuthService,
     private router: Router,
     private store: Store,
-    private userApi: UserApi,
-    private userIdentityApi: UserIdentityApi
+    private usersService: UsersService,
+    private sharedAuthService: SharedAuthService,
+    private userIdentityService: UserIdentitiesService,
   ) {}
 }

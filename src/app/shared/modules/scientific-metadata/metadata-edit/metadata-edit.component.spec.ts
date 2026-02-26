@@ -4,36 +4,38 @@ import { MetadataEditComponent } from "./metadata-edit.component";
 import { NO_ERRORS_SCHEMA } from "@angular/core";
 
 import { FormBuilder } from "@angular/forms";
-import { MatAutocompleteModule } from "@angular/material/autocomplete";
-import { MatFormFieldModule } from "@angular/material/form-field";
-import { MatOptionModule } from "@angular/material/core";
-import { MatSelectModule } from "@angular/material/select";
-import { MatInputModule } from "@angular/material/input";
-import { MatButtonModule } from "@angular/material/button";
-import { MatIconModule } from "@angular/material/icon";
+import { ScientificMetadataModule } from "../scientific-metadata.module";
+import { AppConfigService } from "app-config.service";
+import { TitleCasePipe } from "shared/pipes/title-case.pipe";
+import { ReplaceUnderscorePipe } from "shared/pipes/replace-underscore.pipe";
+
+const getConfig = () => ({
+  metadataEditingUnitListDisabled: true,
+  dateFormat: "yyyy-MM-dd HH:mm",
+});
 
 describe("MetadataEditComponent", () => {
   let component: MetadataEditComponent;
   let fixture: ComponentFixture<MetadataEditComponent>;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        schemas: [NO_ERRORS_SCHEMA],
-        declarations: [MetadataEditComponent],
-        imports: [
-          MatAutocompleteModule,
-          MatButtonModule,
-          MatFormFieldModule,
-          MatIconModule,
-          MatInputModule,
-          MatOptionModule,
-          MatSelectModule,
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      schemas: [NO_ERRORS_SCHEMA],
+      declarations: [MetadataEditComponent],
+      imports: [ScientificMetadataModule],
+      providers: [FormBuilder, ReplaceUnderscorePipe, TitleCasePipe],
+    }).compileComponents();
+    TestBed.overrideComponent(MetadataEditComponent, {
+      set: {
+        providers: [
+          {
+            provide: AppConfigService,
+            useValue: { getConfig },
+          },
         ],
-        providers: [FormBuilder],
-      }).compileComponents();
-    })
-  );
+      },
+    });
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(MetadataEditComponent);
@@ -139,10 +141,30 @@ describe("MetadataEditComponent", () => {
       expect(component.items.length).toEqual(1);
       expect(component.items.at(0).get("fieldName").value).toEqual("testName");
       expect(component.items.at(0).get("fieldType").value).toEqual("string");
-      expect(component.items.at(0).get("fieldValue").value).toEqual(
-        JSON.stringify({ v: 100, u: "Hz" })
-      );
+      expect(component.items.at(0).get("fieldValue").value).toEqual({
+        v: 100,
+        u: "Hz",
+      });
       expect(component.items.at(0).get("fieldUnit").status).toEqual("DISABLED");
+    });
+
+    it("should add typed metadata from the provided metadata object to the FormGroup array", () => {
+      expect(component.items.length).toEqual(0);
+
+      component.metadata = {
+        testName: {
+          value: "123",
+          unit: "",
+        },
+      };
+
+      component.addCurrentMetadata();
+
+      expect(component.items.length).toEqual(1);
+      expect(component.items.at(0).get("fieldName").value).toEqual("testName");
+      expect(component.items.at(0).get("fieldType").value).toEqual("string");
+      expect(component.items.at(0).get("fieldValue").value).toEqual("123");
+      expect(component.items.at(0).get("fieldUnit").value).toEqual("");
     });
 
     it("should do nothing if the metadata object is undefined", () => {
@@ -253,13 +275,26 @@ describe("MetadataEditComponent", () => {
   });
 
   describe("#getUnits()", () => {
-    it("should get an array of units based on the value of fieldName", () => {
+    it("should get an array of units based on the value of fieldName if metadataEditingUnitListDisabled is false", () => {
+      component.appConfig.metadataEditingUnitListDisabled = false;
+
       component.addMetadata();
       component.items.at(0).get("fieldName").setValue("elapsed_time");
 
       component.getUnits(0);
 
       expect(component.units.includes("seconds")).toEqual(true);
+    });
+
+    it("should not get an array of units based on the value of fieldName if metadataEditingUnitListDisabled is true", () => {
+      component.appConfig.metadataEditingUnitListDisabled = true;
+
+      component.addMetadata();
+      component.items.at(0).get("fieldName").setValue("elapsed_time");
+
+      component.getUnits(0);
+
+      expect(component.units).toEqual([]);
     });
   });
 
@@ -289,15 +324,6 @@ describe("MetadataEditComponent", () => {
       const inputType = component.setValueInputType(0);
 
       expect(inputType).toEqual("text");
-    });
-
-    it("should return 'datetime-local' if metadata type is 'date'", () => {
-      component.addMetadata();
-      component.items.at(0).get("fieldType").setValue("date");
-
-      const inputType = component.setValueInputType(0);
-
-      expect(inputType).toEqual("datetime-local");
     });
 
     it("should return 'text' if metadata type is undefined", () => {

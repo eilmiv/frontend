@@ -1,8 +1,9 @@
-import { Job, JobFilters } from "state-management/models";
+import { OutputJobV3Dto } from "@scicatproject/scicat-sdk-ts-angular";
+import { JobFilters } from "state-management/models";
 
 export interface JobsState {
-  jobs: Job[];
-  currentJob: Job | undefined;
+  jobs: OutputJobV3Dto[];
+  currentJob: OutputJobV3Dto | undefined;
 
   totalCount: number;
 
@@ -23,6 +24,6 @@ export const initialJobsState: JobsState = {
     mode: undefined,
     sortField: "creationTime:desc",
     skip: 0,
-    limit: 25
-  }
+    limit: 25,
+  },
 };

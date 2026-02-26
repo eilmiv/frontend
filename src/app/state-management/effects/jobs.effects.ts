@@ -1,6 +1,7 @@
 import { Injectable } from "@angular/core";
-import { Actions, createEffect, ofType, concatLatestFrom } from "@ngrx/effects";
-import { JobApi, Job } from "shared/sdk";
+import { Actions, createEffect, ofType } from "@ngrx/effects";
+import { concatLatestFrom } from "@ngrx/operators";
+import { JobsService } from "@scicatproject/scicat-sdk-ts-angular";
 import { Store } from "@ngrx/store";
 import { selectQueryParams } from "state-management/selectors/jobs.selectors";
 import * as fromActions from "state-management/actions/jobs.actions";
@@ -24,35 +25,19 @@ export class JobEffects {
         fromActions.fetchJobsAction,
         fromActions.changePageAction,
         fromActions.sortByColumnAction,
-        fromActions.setJobViewModeAction
+        fromActions.setJobViewModeAction,
       ),
       concatLatestFrom(() => this.queryParams$),
       map(([action, params]) => params),
       switchMap((params) =>
-        this.jobApi.find<Job>(params).pipe(
-          switchMap((jobs: Job[]) => [
+        this.jobsService.jobsControllerFindAllV3(JSON.stringify(params)).pipe(
+          switchMap((jobs) => [
             fromActions.fetchJobsCompleteAction({ jobs }),
             fromActions.fetchCountAction(),
           ]),
-          catchError(() => of(fromActions.fetchJobsFailedAction()))
-        )
-      )
-    );
-  });
-
-  fetchCount$ = createEffect(() => {
-    return this.actions$.pipe(
-      ofType(fromActions.fetchCountAction),
-      concatLatestFrom(() => this.queryParams$),
-      map(([action, params]) => params),
-      switchMap(({ where }) =>
-        this.jobApi.count(where).pipe(
-          map((res) =>
-            fromActions.fetchCountCompleteAction({ count: res.count })
-          ),
-          catchError(() => of(fromActions.fetchCountFailedAction()))
-        )
-      )
+          catchError(() => of(fromActions.fetchJobsFailedAction())),
+        ),
+      ),
     );
   });
 
@@ -60,8 +45,8 @@ export class JobEffects {
     return this.actions$.pipe(
       ofType(fromActions.changePageAction),
       map(({ limit }) =>
-        updateUserSettingsAction({ property: { jobCount: limit } })
-      )
+        updateUserSettingsAction({ property: { jobCount: limit } }),
+      ),
     );
   });
 
@@ -69,11 +54,11 @@ export class JobEffects {
     return this.actions$.pipe(
       ofType(fromActions.fetchJobAction),
       switchMap(({ jobId }) =>
-        this.jobApi.findById<Job>(jobId).pipe(
-          map((job: Job) => fromActions.fetchJobCompleteAction({ job })),
-          catchError(() => of(fromActions.fetchJobFailedAction()))
-        )
-      )
+        this.jobsService.jobsControllerFindOneV3(jobId).pipe(
+          map((job) => fromActions.fetchJobCompleteAction({ job })),
+          catchError(() => of(fromActions.fetchJobFailedAction())),
+        ),
+      ),
     );
   });
 
@@ -81,11 +66,11 @@ export class JobEffects {
     return this.actions$.pipe(
       ofType(fromActions.submitJobAction),
       switchMap(({ job }) =>
-        this.jobApi.create(job).pipe(
+        this.jobsService.jobsControllerCreateV3(job).pipe(
           map((res) => fromActions.submitJobCompleteAction({ job: res })),
-          catchError((err) => of(fromActions.submitJobFailedAction({ err })))
-        )
-      )
+          catchError((err) => of(fromActions.submitJobFailedAction({ err }))),
+        ),
+      ),
     );
   });
 
@@ -99,7 +84,7 @@ export class JobEffects {
           duration: 5000,
         };
         return of(showMessageAction({ message }));
-      })
+      }),
     );
   });
 
@@ -113,7 +98,7 @@ export class JobEffects {
           duration: 5000,
         };
         return of(showMessageAction({ message }));
-      })
+      }),
     );
   });
 
@@ -123,9 +108,9 @@ export class JobEffects {
         fromActions.fetchJobsAction,
         fromActions.fetchCountAction,
         fromActions.fetchJobAction,
-        fromActions.submitJobAction
+        fromActions.submitJobAction,
       ),
-      switchMap(() => of(loadingAction()))
+      switchMap(() => of(loadingAction())),
     );
   });
 
@@ -138,15 +123,15 @@ export class JobEffects {
         fromActions.fetchJobCompleteAction,
         fromActions.fetchJobFailedAction,
         fromActions.submitJobCompleteAction,
-        fromActions.submitJobFailedAction
+        fromActions.submitJobFailedAction,
       ),
-      switchMap(() => of(loadingCompleteAction()))
+      switchMap(() => of(loadingCompleteAction())),
     );
   });
 
   constructor(
     private actions$: Actions,
-    private jobApi: JobApi,
-    private store: Store
+    private jobsService: JobsService,
+    private store: Store,
   ) {}
 }

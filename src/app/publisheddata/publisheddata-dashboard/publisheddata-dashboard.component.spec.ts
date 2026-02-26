@@ -6,27 +6,24 @@ import {
 } from "@angular/core/testing";
 
 import { PublisheddataDashboardComponent } from "./publisheddata-dashboard.component";
-import { MockStore } from "shared/MockStubs";
+import { MockStore, createMock, mockPublishedData } from "shared/MockStubs";
 import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { StoreModule, Store } from "@ngrx/store";
 import { Router } from "@angular/router";
-import {
-  CheckboxEvent,
-  PageChangeEvent,
-  SortChangeEvent,
-} from "shared/modules/table/table.component";
-import {
-  changePageAction,
-  sortByColumnAction,
-} from "state-management/actions/published-data.actions";
-import { PublishedData } from "shared/sdk";
+import { CheckboxEvent } from "shared/modules/table/table.component";
 import { MatCheckboxChange } from "@angular/material/checkbox";
 import { of } from "rxjs";
 import { Message, MessageType } from "state-management/models";
 import { showMessageAction } from "state-management/actions/user.actions";
-import { FlexLayoutModule } from "@angular/flex-layout";
+import { FlexLayoutModule } from "@ngbracket/ngx-layout";
 import { MatButtonModule } from "@angular/material/button";
 import { MatIconModule } from "@angular/material/icon";
+import { AppConfigService } from "app-config.service";
+import { ScicatDataService } from "shared/services/scicat-data-service";
+import { ExportExcelService } from "shared/services/export-excel.service";
+import { PublishedData } from "@scicatproject/scicat-sdk-ts-angular";
+
+const getConfig = () => ({});
 
 describe("PublisheddataDashboardComponent", () => {
   let component: PublisheddataDashboardComponent;
@@ -38,26 +35,35 @@ describe("PublisheddataDashboardComponent", () => {
   let store: MockStore;
   let dispatchSpy;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        schemas: [NO_ERRORS_SCHEMA],
-        imports: [
-          FlexLayoutModule,
-          MatButtonModule,
-          MatIconModule,
-          StoreModule.forRoot({}),
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      schemas: [NO_ERRORS_SCHEMA],
+      imports: [
+        FlexLayoutModule,
+        MatButtonModule,
+        MatIconModule,
+        StoreModule.forRoot({}),
+      ],
+      declarations: [PublisheddataDashboardComponent],
+    });
+    TestBed.overrideComponent(PublisheddataDashboardComponent, {
+      set: {
+        providers: [
+          {
+            provide: Router,
+            useValue: router,
+          },
+          {
+            provide: AppConfigService,
+            useValue: { getConfig },
+          },
+          { provide: ScicatDataService, useValue: {} },
+          { provide: ExportExcelService, useValue: {} },
         ],
-        declarations: [PublisheddataDashboardComponent],
-      });
-      TestBed.overrideComponent(PublisheddataDashboardComponent, {
-        set: {
-          providers: [{ provide: Router, useValue: router }],
-        },
-      });
-      TestBed.compileComponents();
-    })
-  );
+      },
+    });
+    TestBed.compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(PublisheddataDashboardComponent);
@@ -85,7 +91,7 @@ describe("PublisheddataDashboardComponent", () => {
       const message = new Message(
         "The selected DOI's have been copied to your clipboard",
         MessageType.Success,
-        5000
+        5000,
       );
 
       component.onShareClick();
@@ -97,77 +103,50 @@ describe("PublisheddataDashboardComponent", () => {
     });
   });
 
-  describe("#onPageChange()", () => {
-    it("should dispatch a changePageAction action", () => {
-      dispatchSpy = spyOn(store, "dispatch");
-
-      const event: PageChangeEvent = {
-        pageIndex: 0,
-        pageSize: 25,
-        length: 25,
-      };
-      component.onPageChange(event);
-
-      expect(dispatchSpy).toHaveBeenCalledTimes(1);
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        changePageAction({ page: event.pageIndex, limit: event.pageSize })
-      );
-    });
-  });
-
-  describe("#onSortChange()", () => {
-    it("should dispatch a sortByColumnAction", () => {
-      dispatchSpy = spyOn(store, "dispatch");
-
-      const event: SortChangeEvent = {
-        active: "title",
-        direction: "asc",
-      };
-      component.onSortChange(event);
-
-      expect(dispatchSpy).toHaveBeenCalledTimes(1);
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        sortByColumnAction({ column: event.active, direction: event.direction })
-      );
-    });
-  });
-
   describe("#onRowClick", () => {
     it("should navigate to a Published Dataset", () => {
-      const published = new PublishedData();
+      const published = mockPublishedData;
       const id = encodeURIComponent(published.doi);
       component.onRowClick(published);
 
       expect(router.navigateByUrl).toHaveBeenCalledTimes(1);
       expect(router.navigateByUrl).toHaveBeenCalledWith(
-        "/publishedDatasets/" + id
+        "/publishedDatasets/" + id,
       );
     });
   });
 
   describe("#onSelectAll()", () => {
     it("should add all DOI's to selectedDOIs if checked is true", () => {
-      const published = new PublishedData({
+      const published = createMock<PublishedData>({
         doi: "test",
-        creator: ["test"],
-        publisher: "test",
-        publicationYear: 2021,
         title: "test",
         abstract: "test",
-        dataDescription: "test",
-        resourceType: "test",
-        pidArray: [],
+        datasetPids: [],
+        createdAt: "",
+        registeredTime: "",
+        status: PublishedData.StatusEnum.private,
+        updatedAt: "",
+        metadata: {
+          creators: ["test creator"],
+          publisher: { name: "test" },
+          publicationYear: 2021,
+          resourceType: "test",
+        },
       });
 
       spyOn(component.vm$, "pipe").and.returnValue(
-        of({ publishedData: [published] })
+        of({ publishedData: [published] }),
       );
 
       const event = {
-        checked: true,
-      } as MatCheckboxChange;
+        event: {
+          checked: true,
+        },
+        selection: { selected: [published] },
+      };
 
-      component.onSelectAll(event);
+      component.onSelectAll(event as any);
 
       expect(component.selectedDOIs.length).toEqual(1);
     });
@@ -175,14 +154,17 @@ describe("PublisheddataDashboardComponent", () => {
     it("should remove all DOI's from selectedDOIs if checked is false", () => {
       component.selectedDOIs.push(
         component.doiBaseUrl + "test1",
-        component.doiBaseUrl + "test2"
+        component.doiBaseUrl + "test2",
       );
 
       const event = {
-        checked: false,
-      } as MatCheckboxChange;
+        event: {
+          checked: false,
+        },
+        selection: [],
+      };
 
-      component.onSelectAll(event);
+      component.onSelectAll(event as any);
 
       expect(component.selectedDOIs.length).toEqual(0);
     });
@@ -198,7 +180,7 @@ describe("PublisheddataDashboardComponent", () => {
       component.onSelectOne(checkboxEvent);
 
       expect(component.selectedDOIs).toContain(
-        component.doiBaseUrl + checkboxEvent.row.doi
+        component.doiBaseUrl + checkboxEvent.row.doi,
       );
     });
 

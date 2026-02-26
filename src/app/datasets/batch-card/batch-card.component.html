@@ -1,5 +1,7 @@
 <mat-card>
-  <div class="title">Cart</div>
+  <mat-card-header>
+    <mat-card-title>Cart</mat-card-title>
+  </mat-card-header>
 
   <mat-card-content>
     <div class="count" [ngPlural]="batchSize">
@@ -17,7 +19,7 @@
       Remove All
     </button>
 
-    <a mat-button routerLink="/datasets/batch" class="button" color="primary">
+    <a mat-button [routerLink]="getRouterLink()" class="button" color="primary">
       <mat-icon> play_circle_filled </mat-icon>
       Actions
     </a>

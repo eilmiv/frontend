@@ -1,3 +1,5 @@
+/* eslint @typescript-eslint/no-empty-function:0 */
+
 import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { ComponentFixture, TestBed, waitForAsync } from "@angular/core/testing";
 import { MatAutocompleteModule } from "@angular/material/autocomplete";
@@ -15,46 +17,45 @@ import { BrowserAnimationsModule } from "@angular/platform-browser/animations";
 import { AppConfigService } from "app-config.service";
 
 import { SearchParametersDialogComponent } from "./search-parameters-dialog.component";
+import { ScientificCondition } from "../../../state-management/models";
 
 const getConfig = () => ({
-  scienceSearchUnitsEnabled: true
+  scienceSearchUnitsEnabled: true,
 });
 
 describe("SearchParametersDialogComponent", () => {
   let component: SearchParametersDialogComponent;
   let fixture: ComponentFixture<SearchParametersDialogComponent>;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        schemas: [NO_ERRORS_SCHEMA],
-        imports: [
-          BrowserAnimationsModule,
-          MatAutocompleteModule,
-          MatButtonModule,
-          MatDialogModule,
-          MatFormFieldModule,
-          MatInputModule,
-          MatOptionModule,
-          MatSelectModule,
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      schemas: [NO_ERRORS_SCHEMA],
+      imports: [
+        BrowserAnimationsModule,
+        MatAutocompleteModule,
+        MatButtonModule,
+        MatDialogModule,
+        MatFormFieldModule,
+        MatInputModule,
+        MatOptionModule,
+        MatSelectModule,
+      ],
+      declarations: [SearchParametersDialogComponent],
+    });
+    TestBed.overrideComponent(SearchParametersDialogComponent, {
+      set: {
+        providers: [
+          {
+            provide: AppConfigService,
+            useValue: { getConfig },
+          },
+          { provide: MAT_DIALOG_DATA, useValue: { parameterKeys: [] } },
+          { provide: MatDialogRef, useValue: { close: () => {} } },
         ],
-        declarations: [SearchParametersDialogComponent],
-      });
-      TestBed.overrideComponent(SearchParametersDialogComponent, {
-        set: {
-          providers: [
-            {
-              provide: AppConfigService,
-              useValue: { getConfig },
-            },
-            { provide: MAT_DIALOG_DATA, useValue: { parameterKeys: [] } },
-            { provide: MatDialogRef, useValue: { close: () => {} } },
-          ],
-        },
-      });
-      TestBed.compileComponents();
-    })
-  );
+      },
+    });
+    TestBed.compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(SearchParametersDialogComponent);
@@ -64,24 +65,6 @@ describe("SearchParametersDialogComponent", () => {
 
   it("should create", () => {
     expect(component).toBeTruthy();
-  });
-
-  describe("#add()", () => {
-    it("should close dialog and emit data", () => {
-      const dialogCloseSpy = spyOn(component.dialogRef, "close");
-      const formValues = {
-        lhs: "mass",
-        relation: "LESS_THAN",
-        rhs: 5,
-        unit: "gram",
-      };
-      component.parametersForm.setValue(formValues);
-
-      component.add();
-
-      expect(dialogCloseSpy).toHaveBeenCalledTimes(1);
-      expect(dialogCloseSpy).toHaveBeenCalledWith({ data: formValues });
-    });
   });
 
   describe("#cancel()", () => {
@@ -114,7 +97,7 @@ describe("SearchParametersDialogComponent", () => {
         rhs: 5,
         unit: "",
       };
-      component.parametersForm.setValue(formValues);
+      component.parametersForm.setValue(formValues as ScientificCondition);
 
       component.toggleUnitField();
 
@@ -127,7 +110,7 @@ describe("SearchParametersDialogComponent", () => {
         rhs: 5,
         unit: "",
       };
-      component.parametersForm.setValue(formValues);
+      component.parametersForm.setValue(formValues as ScientificCondition);
 
       component.toggleUnitField();
 
@@ -140,66 +123,11 @@ describe("SearchParametersDialogComponent", () => {
         rhs: 5,
         unit: "",
       };
-      component.parametersForm.setValue(formValues);
+      component.parametersForm.setValue(formValues as ScientificCondition);
 
       component.toggleUnitField();
 
       expect(component.parametersForm.get("unit").disabled).toEqual(true);
-    });
-  });
-
-  describe("#isInvalid()", () => {
-    it("should return true if form is invalid", () => {
-      const formValues = {
-        lhs: "m",
-        relation: "LESS_THAN",
-        rhs: 5,
-        unit: "",
-      };
-      component.parametersForm.setValue(formValues);
-
-      const isInvalid = component.isInvalid();
-
-      expect(isInvalid).toEqual(true);
-    });
-    it("should return true if relation is not EQUAL_TO_STRING and rhs is a string", () => {
-      const formValues = {
-        lhs: "mass",
-        relation: "LESS_THAN",
-        rhs: "test",
-        unit: "gram",
-      };
-      component.parametersForm.setValue(formValues);
-
-      const isInvalid = component.isInvalid();
-
-      expect(isInvalid).toEqual(true);
-    });
-    it("should return true if lhs and rhs are empty", () => {
-      const formValues = {
-        lhs: "",
-        relation: "LESS_THAN",
-        rhs: "",
-        unit: "gram",
-      };
-      component.parametersForm.setValue(formValues);
-
-      const isInvalid = component.isInvalid();
-
-      expect(isInvalid).toEqual(true);
-    });
-    it("should return false if lhs and rhs are not empty", () => {
-      const formValues = {
-        lhs: "mass",
-        relation: "LESS_THAN",
-        rhs: 5,
-        unit: "gram",
-      };
-      component.parametersForm.setValue(formValues);
-
-      const isInvalid = component.isInvalid();
-
-      expect(isInvalid).toEqual(false);
     });
   });
 });

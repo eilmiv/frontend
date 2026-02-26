@@ -1,8 +1,13 @@
-import { Component, Input, Output, EventEmitter, ViewEncapsulation } from "@angular/core";
-import { Logbook } from "state-management/models";
+import {
+  Component,
+  Input,
+  Output,
+  EventEmitter,
+  ViewEncapsulation,
+} from "@angular/core";
 import {
   PageChangeEvent,
-  SortChangeEvent
+  SortChangeEvent,
 } from "shared/modules/table/table.component";
 
 @Component({
@@ -10,9 +15,10 @@ import {
   templateUrl: "./logbooks-detail.component.html",
   styleUrls: ["./logbooks-detail.component.scss"],
   encapsulation: ViewEncapsulation.None,
+  standalone: false,
 })
 export class LogbooksDetailComponent {
-  @Input() logbook: Logbook = new Logbook();
+  @Input() logbook: any;
   @Input() entriesCount: number | null = 0;
   @Input() entriesPerPage: number | null = 0;
   @Input() currentPage: number | null = 0;

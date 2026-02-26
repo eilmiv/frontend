@@ -1,36 +1,8 @@
 import {
-  User,
-  UserIdentity,
-  UserSetting,
-  Job,
-  Dataset,
-  RawDataset,
-  Proposal,
-  Policy,
-  Sample,
-  Logbook,
-  PublishedData,
-  Attachment,
-  Instrument,
-} from "shared/sdk/models";
-export {
-  User,
-  UserIdentity,
-  UserSetting,
-  Job,
-  Dataset,
-  RawDataset,
-  Proposal,
-  Policy,
-  Sample,
-  Logbook,
-  PublishedData,
-  Attachment,
-  Instrument,
-};
-
-import { DatasetInterface } from "shared/sdk";
-export { DatasetInterface };
+  FilterConfig,
+  ConditionConfig,
+} from "state-management/state/user.store";
+import { IngestorAutodiscovery } from "ingestor/ingestor-page/helper/ingestor.component-helper";
 
 export interface Settings {
   tapeCopies: string;
@@ -41,14 +13,93 @@ export interface Settings {
 
 export interface TableColumn {
   name: string;
+  header?: string;
+  path?: string;
   order: number;
-  type: "standard" | "custom";
+  type: "standard" | "custom" | "date" | "hoverContent";
   enabled: boolean;
+  format?: string;
+  tooltip?: string;
+  width?: number;
+}
+
+export interface LabelsLocalization {
+  dataset: Record<string, string>;
+  proposal: Record<string, string>;
+}
+
+export interface DatasetDetailComponentConfig {
+  enableCustomizedComponent: boolean;
+  customization: CustomizationItem[];
+}
+
+export interface IngestorComponentConfig {
+  ingestorEnabled: boolean;
+  ingestorAutodiscoveryOptions?: IngestorAutodiscovery[];
+}
+
+export enum DatasetViewFieldType {
+  TEXT = "text",
+  DATE = "date",
+  LINKY = "linky",
+  COPY = "copy",
+  TAG = "tag",
+  INTERNALLINK = "internalLink",
+}
+
+export enum InternalLinkType {
+  DATASETS = "inputDatasets",
+  SAMPLES = "sampleIds",
+  INSTRUMENTS = "instrumentIds",
+  INSTRUMENTS_NAME = "instrumentName",
+  PROPOSALS = "proposalIds",
+}
+
+interface AttachmentOptions {
+  limit: number;
+  size: "small" | "medium" | "large";
+}
+type viewModeOptions = "table" | "json" | "tree";
+
+export interface CustomizationItem {
+  type: CustomizationType;
+  label: string;
+  order: number;
+  row: number;
+  col: number;
+  fields?: Field[];
+  source?: string;
+  options?: AttachmentOptions;
+  viewMode?: viewModeOptions;
+}
+
+export interface Field {
+  element: FieldType;
+  source: string;
+  order: number;
+  path?: string;
+}
+
+// Type alias for allowed customization types
+type CustomizationType =
+  | "regular"
+  | "scientificMetadata"
+  | "datasetJsonView"
+  | "attachments";
+
+// Type alias for allowed field types
+type FieldType = "text" | "copy" | "linky" | "tag" | "date";
+
+export interface ListSettings {
+  columns?: TableColumn[];
+  filters?: FilterConfig[];
+  conditions?: ConditionConfig[];
 }
 
 export enum MessageType {
   Success = "success",
   Error = "error",
+  Info = "info",
 }
 
 export interface Message {
@@ -82,13 +133,19 @@ type ScientificConditionRelation =
   | "EQUAL_TO_NUMERIC"
   | "EQUAL_TO_STRING"
   | "GREATER_THAN"
-  | "LESS_THAN";
+  | "LESS_THAN"
+  | "GREATER_THAN_OR_EQUAL"
+  | "LESS_THAN_OR_EQUAL"
+  | "RANGE"
+  | "EQUAL_TO";
 
 export interface ScientificCondition {
   lhs: string;
   relation: ScientificConditionRelation;
-  rhs: string | number;
+  rhs: string | number | (string | number)[];
   unit: string;
+  unitsOptions?: string[];
+  human_name?: string;
 }
 
 export interface GenericFilters {
@@ -108,6 +165,7 @@ export interface DatasetFilters extends GenericFilters {
   mode: Record<string, unknown>;
   scientific: ScientificCondition[];
   isPublished: boolean | "";
+  pid: string | { $regex: string };
 }
 
 export interface SampleFilters extends GenericFilters {

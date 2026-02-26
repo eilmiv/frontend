@@ -1,27 +1,28 @@
 import { createFeatureSelector, createSelector } from "@ngrx/store";
 import { InstrumentState } from "state-management/state/instruments.store";
+import { selectTablesSettings } from "./user.selectors";
 
 const selectInstrumentState =
   createFeatureSelector<InstrumentState>("instruments");
 
 export const selectInstruments = createSelector(
   selectInstrumentState,
-  (state) => state.instruments
+  (state) => state.instruments,
 );
 
 export const selectCurrentInstrument = createSelector(
   selectInstrumentState,
-  (state) => state.currentInstrument
+  (state) => state.currentInstrument,
 );
 
 export const selectInstrumentsCount = createSelector(
   selectInstrumentState,
-  (state) => state.totalCount
+  (state) => state.totalCount,
 );
 
 export const selectFilters = createSelector(
   selectInstrumentState,
-  (state) => state.filters
+  (state) => state.filters,
 );
 
 export const selectPage = createSelector(selectFilters, (filters) => {
@@ -31,18 +32,27 @@ export const selectPage = createSelector(selectFilters, (filters) => {
 
 export const selectInstrumentsPerPage = createSelector(
   selectFilters,
-  (filters) => filters.limit
+  (filters) => filters.limit,
 );
 
-export const selectInstrumentsDashboardPageViewModel = createSelector(
+export const selectInstrumentsWithCountAndTableSettings = createSelector(
   selectInstruments,
-  selectPage,
   selectInstrumentsCount,
-  selectInstrumentsPerPage,
-  (instruments, currentPage, instrumentsCount, instrumentsPerPage) => ({
-    instruments,
-    currentPage,
-    instrumentsCount,
-    instrumentsPerPage,
-  })
+  selectTablesSettings,
+  (instruments, count, tablesSettings) => {
+    return {
+      instruments,
+      count,
+      tablesSettings,
+    };
+  },
+);
+
+export const selectInstrumentWithIdAndLabel = createSelector(
+  selectInstruments,
+  (arr) =>
+    arr.map((inst) => ({
+      _id: inst.pid,
+      label: inst.name,
+    })),
 );

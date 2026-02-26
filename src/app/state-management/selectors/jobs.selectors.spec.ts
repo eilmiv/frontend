@@ -1,15 +1,19 @@
 import * as fromSelectors from "./jobs.selectors";
-
+import { OutputJobV3Dto } from "@scicatproject/scicat-sdk-ts-angular";
 import { JobsState } from "../state/jobs.store";
-import { JobInterface, Job } from "shared/sdk";
+import { createMock } from "shared/MockStubs";
 
-const data: JobInterface = {
-  id: "testId",
+const job = createMock<OutputJobV3Dto>({
+  id: "",
   emailJobInitiator: "test@email.com",
   type: "archive",
-  datasetList: {},
-};
-const job = new Job(data);
+  creationTime: "",
+  executionTime: "",
+  jobParams: {},
+  jobStatusMessage: "",
+  datasetList: [],
+  jobResultObject: {},
+});
 
 const jobFilters = {
   mode: null,
@@ -39,7 +43,7 @@ describe("Job Selectors", () => {
   describe("selectCurrentJob", () => {
     it("should select the current job", () => {
       expect(
-        fromSelectors.selectCurrentJob.projector(initialJobsState)
+        fromSelectors.selectCurrentJob.projector(initialJobsState),
       ).toEqual(job);
     });
   });
@@ -47,7 +51,7 @@ describe("Job Selectors", () => {
   describe("selectJobsCount", () => {
     it("should select the total jobs count", () => {
       expect(fromSelectors.selectJobsCount.projector(initialJobsState)).toEqual(
-        0
+        0,
       );
     });
   });
@@ -55,7 +59,7 @@ describe("Job Selectors", () => {
   describe("selectSubmitError", () => {
     it("should select submitError", () => {
       expect(
-        fromSelectors.selectSubmitError.projector(initialJobsState)
+        fromSelectors.selectSubmitError.projector(initialJobsState),
       ).toBeUndefined();
     });
   });
@@ -63,7 +67,7 @@ describe("Job Selectors", () => {
   describe("selectFilters", () => {
     it("should select the filters", () => {
       expect(fromSelectors.selectFilters.projector(initialJobsState)).toEqual(
-        jobFilters
+        jobFilters,
       );
     });
   });
@@ -71,7 +75,7 @@ describe("Job Selectors", () => {
   describe("selectJobViewMode", () => {
     it("should select the mode from filters", () => {
       expect(
-        fromSelectors.selectJobViewMode.projector(initialJobsState.filters)
+        fromSelectors.selectJobViewMode.projector(initialJobsState.filters),
       ).toEqual(null);
     });
   });
@@ -81,7 +85,7 @@ describe("Job Selectors", () => {
       const { skip, limit } = jobFilters;
       const page = skip / limit;
       expect(
-        fromSelectors.selectPage.projector(initialJobsState.filters)
+        fromSelectors.selectPage.projector(initialJobsState.filters),
       ).toEqual(page);
     });
   });
@@ -90,7 +94,7 @@ describe("Job Selectors", () => {
     it("should select the limit from filters", () => {
       const { limit } = jobFilters;
       expect(
-        fromSelectors.selectJobsPerPage.projector(initialJobsState.filters)
+        fromSelectors.selectJobsPerPage.projector(initialJobsState.filters),
       ).toEqual(limit);
     });
   });
@@ -105,7 +109,7 @@ describe("Job Selectors", () => {
         params = { order: sortField, skip, limit };
       }
       expect(
-        fromSelectors.selectQueryParams.projector(initialJobsState.filters)
+        fromSelectors.selectQueryParams.projector(initialJobsState.filters),
       ).toEqual(params);
     });
   });

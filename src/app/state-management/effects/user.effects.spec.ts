@@ -1,15 +1,13 @@
-import { Observable } from "rxjs";
 import { UserEffects } from "./user.effects";
 import {
-  UserApi,
-  UserIdentityApi,
-  User,
+  UsersService,
+  UserIdentitiesService,
   UserIdentity,
-  AccessToken,
-  LoopBackAuth,
-  SDKToken,
-  UserSetting,
-} from "shared/sdk";
+  ReturnedUserDto,
+  UserSettings,
+  Configuration,
+  AuthService as SharedAuthService,
+} from "@scicatproject/scicat-sdk-ts-angular";
 import { ADAuthService } from "users/adauth.service";
 import { TestBed } from "@angular/core/testing";
 import { provideMockActions } from "@ngrx/effects/testing";
@@ -37,26 +35,43 @@ import { clearProposalsStateAction } from "state-management/actions/proposals.ac
 import { clearPublishedDataStateAction } from "state-management/actions/published-data.actions";
 import { clearSamplesStateAction } from "state-management/actions/samples.actions";
 import { Type } from "@angular/core";
-import { HttpErrorResponse } from "@angular/common/http";
+import {
+  HttpErrorResponse,
+  provideHttpClient,
+  withInterceptorsFromDi,
+} from "@angular/common/http";
 import { AppConfigService } from "app-config.service";
+import { provideHttpClientTesting } from "@angular/common/http/testing";
+import { AuthService, SDKToken } from "shared/services/auth/auth.service";
+import { TestObservable } from "jasmine-marbles/src/test-observables";
+import { mockUser } from "shared/MockStubs";
 
 class AppConfigServiceMock {
   getConfig() {
-    return { accessTokenPrefix: "" };
+    return {
+      accessTokenPrefix: "",
+      defaultDatasetsListSettings: {
+        columns: [],
+        conditions: [],
+        filters: [],
+      },
+    };
   }
 }
 
 describe("UserEffects", () => {
-  let actions: Observable<any>;
+  let actions: TestObservable;
   let effects: UserEffects;
   let activeDirAuthService: jasmine.SpyObj<ADAuthService>;
-  let loopBackAuth: jasmine.SpyObj<LoopBackAuth>;
-  let userApi: jasmine.SpyObj<UserApi>;
-  let userIdentityApi: jasmine.SpyObj<UserIdentityApi>;
+  let authService: jasmine.SpyObj<AuthService>;
+  let userApi: jasmine.SpyObj<UsersService>;
+  let sharedAuthService: jasmine.SpyObj<SharedAuthService>;
+  let userIdentityApi: jasmine.SpyObj<UserIdentitiesService>;
   let router: jasmine.SpyObj<Router>;
   const error = new HttpErrorResponse({});
   beforeEach(() => {
     TestBed.configureTestingModule({
+      imports: [],
       providers: [
         UserEffects,
         provideMockActions(() => actions),
@@ -71,42 +86,61 @@ describe("UserEffects", () => {
           useClass: AppConfigServiceMock,
         },
         {
+          provide: Configuration,
+          useClass: Configuration,
+        },
+        {
           provide: ADAuthService,
           useValue: jasmine.createSpyObj("activeDirAuthService", ["login"]),
         },
         {
-          provide: LoopBackAuth,
-          useValue: jasmine.createSpyObj("loopBackAuth", ["setToken"]),
-        },
-        {
-          provide: UserApi,
-          useValue: jasmine.createSpyObj("userApi", [
-            "findById",
-            "login",
+          provide: AuthService,
+          useValue: jasmine.createSpyObj("authService", [
+            "setToken",
+            "clear",
             "isAuthenticated",
-            "logout",
-            "getCurrent",
-            "getSettings",
-            "updateSettings",
-            "getCurrentToken",
+            "getCurrentUserData",
+            "getCurrentUserId",
+            "getToken",
           ]),
         },
         {
-          provide: UserIdentityApi,
-          useValue: jasmine.createSpyObj("userIdentityApi", ["findOne"]),
+          provide: SharedAuthService,
+          useValue: jasmine.createSpyObj("sharedAuthService", [
+            "authControllerLoginV3",
+            "authControllerLogoutV3",
+          ]),
+        },
+        {
+          provide: UsersService,
+          useValue: jasmine.createSpyObj("userApi", [
+            "usersControllerFindByIdV3",
+            "usersControllerGetSettingsV3",
+            "usersControllerPatchExternalSettingsV3",
+            "usersControllerGetMyUserV3",
+          ]),
+        },
+        {
+          provide: UserIdentitiesService,
+          useValue: jasmine.createSpyObj("userIdentityApi", [
+            "userIdentitiesControllerFindOneV3",
+          ]),
         },
         {
           provide: Router,
           useValue: jasmine.createSpyObj("router", ["navigate"]),
         },
+        provideHttpClient(withInterceptorsFromDi()),
+        provideHttpClientTesting(),
       ],
     });
 
     effects = TestBed.inject(UserEffects);
     activeDirAuthService = injectedStub(ADAuthService);
-    loopBackAuth = injectedStub(LoopBackAuth);
-    userApi = injectedStub(UserApi);
-    userIdentityApi = injectedStub(UserIdentityApi);
+    authService = injectedStub(AuthService);
+    sharedAuthService = injectedStub(SharedAuthService);
+    userApi = injectedStub(UsersService);
+    userIdentityApi = injectedStub(UserIdentitiesService);
     router = injectedStub(Router);
   });
 
@@ -170,18 +204,14 @@ describe("UserEffects", () => {
         password,
         rememberMe,
       });
-      const outcome = fromActions.activeDirLoginFailedAction({
-        username,
-        password,
-        rememberMe,
-        error,
-      });
+      const outcome = fromActions.activeDirLoginFailedAction({ error });
 
       actions = hot("-a", { a: action });
       const response = cold("-#", {}, error);
       activeDirAuthService.login.and.returnValue(response);
 
       const expected = cold("--b", { b: outcome });
+
       expect(effects.adLogin$).toBeObservable(expected);
     });
   });
@@ -193,19 +223,27 @@ describe("UserEffects", () => {
       userId: "testId",
     });
 
-    it("should result in a fetchUserCompleteAction and a loginCompleteAction", () => {
-      const user = new User();
+    it("should result in a fetchUserCompleteAction, loginCompleteAction, fetchUserIdentityAction and a fetchUserSettingsAction", () => {
+      const user = mockUser;
+      user.id = "testId";
       const accountType = "external";
       const action = fromActions.fetchUserAction({ adLoginResponse });
       const outcome1 = fromActions.fetchUserCompleteAction();
       const outcome2 = fromActions.loginCompleteAction({ user, accountType });
+      const outcome3 = fromActions.fetchUserIdentityAction({ id: user.id });
+      const outcome4 = fromActions.fetchUserSettingsAction({ id: user.id });
 
       actions = hot("-a", { a: action });
       const response = cold("-a|", { a: user });
-      loopBackAuth.setToken(token);
-      userApi.findById.and.returnValue(response);
+      authService.setToken(token);
+      userApi.usersControllerFindByIdV3.and.returnValue(response);
 
-      const expected = cold("--(bc)", { b: outcome1, c: outcome2 });
+      const expected = cold("--(bcde)", {
+        b: outcome1,
+        c: outcome2,
+        d: outcome3,
+        e: outcome4,
+      });
       expect(effects.fetchUser$).toBeObservable(expected);
     });
 
@@ -215,8 +253,8 @@ describe("UserEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-#", {}, error);
-      loopBackAuth.setToken(token);
-      userApi.findById.and.returnValue(response);
+      authService.setToken(token);
+      userApi.usersControllerFindByIdV3.and.returnValue(response);
 
       const expected = cold("--b", { b: outcome });
       expect(effects.fetchUser$).toBeObservable(expected);
@@ -231,7 +269,7 @@ describe("UserEffects", () => {
     });
 
     it("should result in a fetchUserCompleteAction and a loginCompleteAction", () => {
-      const user = new User();
+      let user: ReturnedUserDto;
       const accountType = "external";
       const action = fromActions.loginOIDCAction({ oidcLoginResponse });
       const outcome1 = fromActions.fetchUserCompleteAction();
@@ -239,8 +277,8 @@ describe("UserEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-a|", { a: user });
-      loopBackAuth.setToken(token);
-      userApi.findById.and.returnValue(response);
+      authService.setToken(token);
+      userApi.usersControllerFindByIdV3.and.returnValue(response);
 
       const expected = cold("--(bc)", { b: outcome1, c: outcome2 });
       expect(effects.oidcFetchUser$).toBeObservable(expected);
@@ -252,76 +290,47 @@ describe("UserEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-#", {}, error);
-      loopBackAuth.setToken(token);
-      userApi.findById.and.returnValue(response);
+      authService.setToken(token);
+      userApi.usersControllerFindByIdV3.and.returnValue(response);
 
       const expected = cold("--b", { b: outcome });
       expect(effects.oidcFetchUser$).toBeObservable(expected);
     });
   });
 
-  describe("loginRedirect$", () => {
-    it("it should redirect activeDirLoginFailedAction to funcLoginAction", () => {
-      const username = "test";
-      const password = "test";
-      const rememberMe = true;
-      const action = fromActions.activeDirLoginFailedAction({
-        username,
-        password,
-        rememberMe,
-        error,
-      });
-      const outcome = fromActions.funcLoginAction({
-        username,
-        password,
-        rememberMe,
-        error,
-      });
-
-      actions = hot("-a", { a: action });
-
-      const expected = cold("-b", { b: outcome });
-      expect(effects.loginRedirect$).toBeObservable(expected);
-    });
-  });
-
   describe("funcLogin$", () => {
-    const username = "test";
-    const password = "test";
-    const rememberMe = true;
+    const form = {
+      username: "test",
+      password: "test",
+      rememberMe: true,
+      error: new HttpErrorResponse({
+        status: 400,
+        statusText: "Bad Request",
+      }),
+    };
 
     it("should result in a funcLoginSuccessAction and a loginCompleteAction", () => {
-      const user = new User();
+      const user = mockUser;
       const accountType = "functional";
-      const action = fromActions.funcLoginAction({
-        username,
-        password,
-        rememberMe,
-        error,
-      });
+      const action = fromActions.funcLoginAction({ form });
       const outcome1 = fromActions.funcLoginSuccessAction();
       const outcome2 = fromActions.loginCompleteAction({ user, accountType });
 
       actions = hot("-a", { a: action });
       const response = cold("-a|", { a: { user } });
-      userApi.login.and.returnValue(response);
+      sharedAuthService.authControllerLoginV3.and.returnValue(response);
 
       const expected = cold("--(bc)", { b: outcome1, c: outcome2 });
       expect(effects.funcLogin$).toBeObservable(expected);
     });
 
     it("should result in a funcLoginFailedAction", () => {
-      const action = fromActions.funcLoginAction({
-        username,
-        password,
-        rememberMe,
-        error,
-      });
+      const action = fromActions.funcLoginAction({ form });
       const outcome = fromActions.funcLoginFailedAction({ error });
 
       actions = hot("-a", { a: action });
-      const response = cold("-#", {});
-      userApi.login.and.returnValue(response);
+      const response = cold("-#", {}, error);
+      sharedAuthService.authControllerLoginV3.and.returnValue(response);
 
       const expected = cold("--b", { b: outcome });
       expect(effects.funcLogin$).toBeObservable(expected);
@@ -401,12 +410,12 @@ describe("UserEffects", () => {
       const outcome6 = clearProposalsStateAction();
       const outcome7 = clearPublishedDataStateAction();
       const outcome8 = clearSamplesStateAction();
-      const outcome9 = fromActions.logoutCompleteAction();
+      const outcome9 = fromActions.logoutCompleteAction({ logoutURL: "" });
 
       actions = hot("-a", { a: action });
-      const response = cold("-a|", {});
-      userApi.isAuthenticated.and.returnValue(true);
-      userApi.logout.and.returnValue(response);
+      const response = cold("-a|", { a: { logoutURL: "" } });
+      authService.isAuthenticated.and.returnValue(true);
+      sharedAuthService.authControllerLogoutV3.and.returnValue(response);
 
       const expected = cold("--(bcdefghij)", {
         b: outcome1,
@@ -428,8 +437,8 @@ describe("UserEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-#", {});
-      userApi.isAuthenticated.and.returnValue(true);
-      userApi.logout.and.returnValue(response);
+      authService.isAuthenticated.and.returnValue(true);
+      sharedAuthService.authControllerLogoutV3.and.returnValue(response);
 
       const expected = cold("--b", { b: outcome });
       expect(effects.logout$).toBeObservable(expected);
@@ -438,20 +447,29 @@ describe("UserEffects", () => {
 
   describe("logoutNavigate$", () => {
     it("should navigate to anonymous view", () => {
-      const action = fromActions.logoutCompleteAction();
+      const action = fromActions.logoutCompleteAction({});
 
       actions = hot("-a", { a: action });
 
       expect(effects.logoutNavigate$).toBeObservable(actions);
       expect(router.navigate).toHaveBeenCalledTimes(1);
-      expect(router.navigate).toHaveBeenCalledWith([""]);
+      expect(router.navigate).toHaveBeenCalledWith(["/login"]);
     });
   });
 
   describe("fetchCurrentUser$", () => {
     it("should result in a fetchCurrentUserCompleteAction, a fetchUserIdentityAction, and a fetchUserSettingsAction", () => {
-      const user = new User();
+      const user = mockUser;
       user.id = "testId";
+      const token = {
+        id: "testId",
+        ttl: 100,
+        scopes: ["string"],
+        created: new Date().toISOString(),
+        userId: "testId",
+        user: "testUser",
+        rememberMe: false,
+      } as unknown as SDKToken;
       const action = fromActions.fetchCurrentUserAction();
       const outcome1 = fromActions.fetchCurrentUserCompleteAction({ user });
       const outcome2 = fromActions.fetchUserIdentityAction({ id: user.id });
@@ -459,7 +477,10 @@ describe("UserEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-a|", { a: user });
-      userApi.getCurrent.and.returnValue(response);
+      authService.getToken.and.returnValue(token);
+      authService.isAuthenticated.and.returnValue(true);
+      authService.getCurrentUserId.and.returnValue(user.id);
+      userApi.usersControllerGetMyUserV3.and.returnValue(response);
 
       const expected = cold("--(bcd)", {
         b: outcome1,
@@ -470,22 +491,76 @@ describe("UserEffects", () => {
     });
 
     it("should result in a fetchCurrentUserFailedAction", () => {
+      const user = mockUser;
+      user.id = "testId";
+      const token = {
+        id: "testId",
+        ttl: 3600,
+        scopes: ["string"],
+        created: new Date().toISOString(),
+        userId: "testId",
+        user: "testUser",
+      } as unknown as SDKToken;
       const action = fromActions.fetchCurrentUserAction();
       const outcome = fromActions.fetchCurrentUserFailedAction();
 
       actions = hot("-a", { a: action });
       const response = cold("-#", {});
-      userApi.getCurrent.and.returnValue(response);
+      authService.getToken.and.returnValue(token);
+      authService.isAuthenticated.and.returnValue(true);
+      authService.getCurrentUserId.and.returnValue(user.id);
+      userApi.usersControllerGetMyUserV3.and.returnValue(response);
 
       const expected = cold("--b", { b: outcome });
       expect(effects.fetchCurrentUser$).toBeObservable(expected);
+    });
+
+    it("should not call getCurrent() if token is expired", () => {
+      const user = mockUser;
+      user.id = "testId";
+      const token = {
+        id: "testId",
+        ttl: 100,
+        scopes: ["string"],
+        created: new Date(1611438651).toISOString(),
+        userId: "testId",
+        user: "testUser",
+      } as unknown as SDKToken;
+      const action = fromActions.fetchCurrentUserAction();
+
+      actions = hot("-a", { a: action });
+      authService.getToken.and.returnValue(token);
+      authService.isAuthenticated.and.returnValue(false);
+
+      const expected = cold("");
+
+      expect(effects.fetchCurrentUser$).toBeObservable(expected);
+      expect(authService.getCurrentUserData).not.toHaveBeenCalled();
     });
   });
 
   describe("fetchUserIdentity$", () => {
     it("should result in a fetchUserIdentityCompleteAction", () => {
       const id = "testId";
-      const userIdentity = new UserIdentity();
+      const userIdentity: UserIdentity = {
+        authStrategy: "",
+        created: "",
+        credentials: {},
+        externalId: "",
+        modified: "",
+        profile: {
+          accessGroups: [],
+          displayName: "",
+          email: "",
+          emails: [],
+          id: "testId",
+          oidcClaims: [],
+          thumbnailPhoto: "",
+          username: "",
+        },
+        provider: "",
+        userId: "testId",
+      };
       const action = fromActions.fetchUserIdentityAction({ id });
       const outcome = fromActions.fetchUserIdentityCompleteAction({
         userIdentity,
@@ -493,7 +568,9 @@ describe("UserEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-a|", { a: userIdentity });
-      userIdentityApi.findOne.and.returnValue(response);
+      userIdentityApi.userIdentitiesControllerFindOneV3.and.returnValue(
+        response,
+      );
 
       const expected = cold("--b", { b: outcome });
       expect(effects.fetchUserIdentity$).toBeObservable(expected);
@@ -506,7 +583,9 @@ describe("UserEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-#", {});
-      userIdentityApi.findOne.and.returnValue(response);
+      userIdentityApi.userIdentitiesControllerFindOneV3.and.returnValue(
+        response,
+      );
 
       const expected = cold("--b", { b: outcome });
       expect(effects.fetchUserIdentity$).toBeObservable(expected);
@@ -517,13 +596,13 @@ describe("UserEffects", () => {
     const id = "testId";
 
     it("should result in a fetchUserSettingsCompleteAction", () => {
-      const userSettings = new UserSetting({
+      const userSettings = {
         columns: [],
         datasetCount: 25,
         jobCount: 25,
         userId: "testId",
         id: "testId",
-      });
+      } as unknown as UserSettings;
       const action = fromActions.fetchUserSettingsAction({ id });
       const outcome = fromActions.fetchUserSettingsCompleteAction({
         userSettings,
@@ -531,7 +610,7 @@ describe("UserEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-a|", { a: userSettings });
-      userApi.getSettings.and.returnValue(response);
+      userApi.usersControllerGetSettingsV3.and.returnValue(response);
 
       const expected = cold("--b", { b: outcome });
       expect(effects.fetchUserSettings$).toBeObservable(expected);
@@ -543,7 +622,7 @@ describe("UserEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-#", {});
-      userApi.getSettings.and.returnValue(response);
+      userApi.usersControllerGetSettingsV3.and.returnValue(response);
 
       const expected = cold("--b", { b: outcome });
       expect(effects.fetchUserSettings$).toBeObservable(expected);
@@ -556,7 +635,8 @@ describe("UserEffects", () => {
         columns: [],
         datasetCount: 10,
         jobCount: 10,
-      } as UserSetting;
+      } as unknown as UserSettings;
+
       const action = fromActions.fetchUserSettingsCompleteAction({
         userSettings,
       });
@@ -616,51 +696,47 @@ describe("UserEffects", () => {
         expect(effects.updateUserColumns$).toBeObservable(expected);
       });
     });
-
-    describe("ofType deselectAllCustomColumnsAction", () => {
-      it("should dispatch an updateUserSettingsAction", () => {
-        const action = fromActions.deselectAllCustomColumnsAction();
-        const outcome = fromActions.updateUserSettingsAction({ property });
-
-        actions = hot("-a", { a: action });
-
-        const expected = cold("-b", { b: outcome });
-        expect(effects.updateUserColumns$).toBeObservable(expected);
-      });
-    });
-
-    describe("ofType addCustomColumnsCompleteAction", () => {
-      it("should dispatch an updateUserSettingsAction", () => {
-        const action = fromActions.addCustomColumnsCompleteAction();
-        const outcome = fromActions.updateUserSettingsAction({ property });
-
-        actions = hot("-a", { a: action });
-
-        const expected = cold("-b", { b: outcome });
-        expect(effects.updateUserColumns$).toBeObservable(expected);
-      });
-    });
   });
 
   describe("updateUserSettings$", () => {
     const property = { columns: [] };
 
     it("should result in an updateUserSettingsCompleteAction", () => {
-      const userSettings = new UserSetting({
+      // TODO: try to fix the types here instead of using type casting and conversion
+      const userSettings = {
         columns: [],
+        filters: [],
+        conditions: [],
         datasetCount: 25,
         jobCount: 25,
         userId: "testId",
         id: "testId",
-      });
+        externalSettings: {
+          columns: [],
+          filters: [],
+          conditions: [],
+        },
+      } as unknown as UserSettings;
+
+      const apiResponse = {
+        datasetCount: 25,
+        jobCount: 25,
+        userId: "testId",
+        id: "testId",
+        externalSettings: {
+          columns: [],
+          filters: [],
+          conditions: [],
+        },
+      };
       const action = fromActions.updateUserSettingsAction({ property });
       const outcome = fromActions.updateUserSettingsCompleteAction({
         userSettings,
       });
 
       actions = hot("-a", { a: action });
-      const response = cold("-a|", { a: userSettings });
-      userApi.updateSettings.and.returnValue(response);
+      const response = cold("-a|", { a: apiResponse });
+      userApi.usersControllerPatchExternalSettingsV3.and.returnValue(response);
 
       const expected = cold("--b", { b: outcome });
       expect(effects.updateUserSettings$).toBeObservable(expected);
@@ -672,7 +748,7 @@ describe("UserEffects", () => {
 
       actions = hot("-a", { a: action });
       const response = cold("-#", {});
-      userApi.updateSettings.and.returnValue(response);
+      userApi.usersControllerPatchExternalSettingsV3.and.returnValue(response);
 
       const expected = cold("--b", { b: outcome });
       expect(effects.updateUserSettings$).toBeObservable(expected);
@@ -681,19 +757,19 @@ describe("UserEffects", () => {
 
   describe("fetchScicatToken$", () => {
     it("should result in a fetchScicatTokenCompleteAction", () => {
-      const token: AccessToken = {
+      const token = {
         id: "testId",
         ttl: 100,
         scopes: ["string"],
-        created: new Date(),
+        created: new Date().toISOString(),
         userId: "testId",
         user: "testUser",
-      };
+      } as unknown as SDKToken;
       const action = fromActions.fetchScicatTokenAction();
       const outcome = fromActions.fetchScicatTokenCompleteAction({ token });
 
       actions = hot("-a", { a: action });
-      userApi.getCurrentToken.and.returnValue(token);
+      authService.getToken.and.returnValue(token);
 
       const expected = cold("-b", { b: outcome });
       expect(effects.fetchScicatToken$).toBeObservable(expected);

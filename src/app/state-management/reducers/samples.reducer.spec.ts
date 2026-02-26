@@ -1,15 +1,24 @@
 import { samplesReducer } from "./samples.reducer";
 import { initialSampleState } from "../state/samples.store";
 import * as fromActions from "../actions/samples.actions";
-import { Attachment, Sample, Dataset, SampleFilters, ScientificCondition } from "../models";
-import { SampleInterface } from "shared/sdk";
+import { SampleFilters, ScientificCondition } from "../models";
+import {
+  createMock,
+  mockDataset as dataset,
+  mockAttachment as attachment,
+} from "shared/MockStubs";
+import { SampleClass } from "@scicatproject/scicat-sdk-ts-angular";
 
-const data: SampleInterface = {
+const sample = createMock<SampleClass>({
   sampleId: "testId",
   ownerGroup: "testGroup",
-  attachments: [],
-};
-const sample = new Sample(data);
+  createdBy: "",
+  updatedBy: "",
+  createdAt: new Date().toString(),
+  updatedAt: new Date().toString(),
+  accessGroups: [],
+  isPublished: false,
+});
 
 describe("SamplesReducer", () => {
   describe("on fetchSamplesCompleteAction", () => {
@@ -55,7 +64,7 @@ describe("SamplesReducer", () => {
 
   describe("on fetchSampleDatasetsCompleteAction", () => {
     it("should set datasets", () => {
-      const datasets = [new Dataset()];
+      const datasets = [dataset];
       const action = fromActions.fetchSampleDatasetsCompleteAction({
         datasets,
       });
@@ -99,13 +108,12 @@ describe("SamplesReducer", () => {
     it("should set attachments for currentSample", () => {
       initialSampleState.currentSample = sample;
 
-      const attachment = new Attachment();
       const action = fromActions.addAttachmentCompleteAction({
         attachment,
       });
       const state = samplesReducer(initialSampleState, action);
 
-      expect(state.currentSample.attachments).toContain(attachment);
+      expect(state.attachments).toContain(attachment);
     });
   });
 
@@ -113,30 +121,28 @@ describe("SamplesReducer", () => {
     it("should set attachments for currentSample", () => {
       initialSampleState.currentSample = sample;
 
-      const attachment = new Attachment();
       const action = fromActions.updateAttachmentCaptionCompleteAction({
         attachment,
       });
       const state = samplesReducer(initialSampleState, action);
 
-      expect(state.currentSample.attachments).toContain(attachment);
+      expect(state.attachments).toContain(attachment);
     });
   });
 
   describe("on removeAttachmentCompleteAction", () => {
     it("should set attachments for currentSample", () => {
       initialSampleState.currentSample = sample;
-      const attachment = new Attachment();
       const attachmentId = "testId";
       attachment.id = attachmentId;
-      initialSampleState.currentSample.attachments = [attachment];
+      initialSampleState.attachments = [attachment];
 
       const action = fromActions.removeAttachmentCompleteAction({
         attachmentId,
       });
       const state = samplesReducer(initialSampleState, action);
 
-      expect(state.currentSample.attachments).toEqual([]);
+      expect(state.attachments).toEqual([]);
     });
   });
 
@@ -232,12 +238,12 @@ describe("SamplesReducer", () => {
       initialSampleState.sampleFilters.characteristics.push(characteristic);
 
       expect(initialSampleState.sampleFilters.characteristics).toContain(
-        characteristic
+        characteristic,
       );
 
-      const index = 0;
+      const lhs = "lhsTest";
 
-      const action = fromActions.removeCharacteristicsFilterAction({ index });
+      const action = fromActions.removeCharacteristicsFilterAction({ lhs });
       const state = samplesReducer(initialSampleState, action);
 
       expect(state.sampleFilters.characteristics).not.toContain(characteristic);

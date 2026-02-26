@@ -1,4 +1,4 @@
-import { MockStore, MockActivatedRoute } from "shared/MockStubs";
+import { MockStore, MockActivatedRoute, mockSample } from "shared/MockStubs";
 import { NO_ERRORS_SCHEMA } from "@angular/core";
 import { Router, ActivatedRoute } from "@angular/router";
 import { SampleDashboardComponent } from "./sample-dashboard.component";
@@ -14,7 +14,6 @@ import {
   changePageAction,
   sortByColumnAction,
 } from "state-management/actions/samples.actions";
-import { Sample } from "shared/sdk";
 import {
   PageChangeEvent,
   SortChangeEvent,
@@ -24,14 +23,18 @@ import { SampleDialogComponent } from "samples/sample-dialog/sample-dialog.compo
 import { MatCardModule } from "@angular/material/card";
 import { MatDialogModule } from "@angular/material/dialog";
 import { MatTableModule } from "@angular/material/table";
-import { FlexLayoutModule } from "@angular/flex-layout";
+import { FlexLayoutModule } from "@ngbracket/ngx-layout";
 import { MatButtonModule } from "@angular/material/button";
 import { MatIconModule } from "@angular/material/icon";
 import { MatChipsModule } from "@angular/material/chips";
 import { AppConfigService } from "app-config.service";
+import {
+  RowEventType,
+  TableEventType,
+} from "shared/modules/dynamic-material-table/models/table-row.model";
 
 const getConfig = () => ({
-  editSampleEnabled: true
+  addSampleEnabled: true,
 });
 
 describe("SampleDashboardComponent", () => {
@@ -44,35 +47,33 @@ describe("SampleDashboardComponent", () => {
   let store: MockStore;
   let dispatchSpy;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        schemas: [NO_ERRORS_SCHEMA],
-        imports: [
-          FlexLayoutModule,
-          MatButtonModule,
-          MatCardModule,
-          MatChipsModule,
-          MatDialogModule,
-          MatIconModule,
-          MatTableModule,
-          StoreModule.forRoot({}),
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      schemas: [NO_ERRORS_SCHEMA],
+      imports: [
+        FlexLayoutModule,
+        MatButtonModule,
+        MatCardModule,
+        MatChipsModule,
+        MatDialogModule,
+        MatIconModule,
+        MatTableModule,
+        StoreModule.forRoot({}),
+      ],
+      declarations: [SampleDashboardComponent],
+      providers: [DatePipe],
+    });
+    TestBed.overrideComponent(SampleDashboardComponent, {
+      set: {
+        providers: [
+          { provide: AppConfigService, useValue: { getConfig } },
+          { provide: Router, useValue: router },
+          { provide: ActivatedRoute, useClass: MockActivatedRoute },
         ],
-        declarations: [SampleDashboardComponent],
-        providers: [DatePipe],
-      });
-      TestBed.overrideComponent(SampleDashboardComponent, {
-        set: {
-          providers: [
-            { provide: AppConfigService, useValue: { getConfig } },
-            { provide: Router, useValue: router },
-            { provide: ActivatedRoute, useClass: MockActivatedRoute },
-          ],
-        },
-      });
-      TestBed.compileComponents();
-    })
-  );
+      },
+    });
+    TestBed.compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(SampleDashboardComponent);
@@ -94,7 +95,7 @@ describe("SampleDashboardComponent", () => {
 
   describe("#formatTableData", () => {
     it("should return an array of sample objects formatted for the table", () => {
-      const samples = [new Sample()];
+      const samples = [mockSample];
 
       const data = component.formatTableData(samples);
 
@@ -117,7 +118,7 @@ describe("SampleDashboardComponent", () => {
         {
           width: "250px",
           data: { name: component.name, description: component.description },
-        }
+        },
       );
     });
   });
@@ -131,7 +132,7 @@ describe("SampleDashboardComponent", () => {
 
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        setTextFilterAction({ text: query })
+        setTextFilterAction({ text: query }),
       );
     });
   });
@@ -145,11 +146,11 @@ describe("SampleDashboardComponent", () => {
         pageSize: 25,
         length: 25,
       };
-      component.onPageChange(event);
+      component.onPaginationChange(event);
 
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        changePageAction({ page: event.pageIndex, limit: event.pageSize })
+        changePageAction({ page: event.pageIndex, limit: event.pageSize }),
       );
     });
   });
@@ -158,28 +159,34 @@ describe("SampleDashboardComponent", () => {
     it("should dispatch a SampleSortByColumnAction", () => {
       dispatchSpy = spyOn(store, "dispatch");
 
-      const event: SortChangeEvent = {
+      const sender: SortChangeEvent = {
         active: "test",
         direction: "asc",
       };
-      component.onSortChange(event);
+      component.onTableEvent({ event: TableEventType.SortChanged, sender });
 
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        sortByColumnAction({ column: event.active, direction: event.direction })
+        sortByColumnAction({
+          column: sender.active,
+          direction: sender.direction,
+        }),
       );
     });
   });
 
   describe("#onRowClick()", () => {
     it("should navigate to a sample", () => {
-      const sample = new Sample();
+      const sample = mockSample;
 
-      component.onRowClick(sample);
+      component.onRowClick({
+        event: RowEventType.RowClick,
+        sender: { row: sample },
+      });
 
       expect(router.navigateByUrl).toHaveBeenCalledTimes(1);
       expect(router.navigateByUrl).toHaveBeenCalledWith(
-        "/samples/" + encodeURIComponent(sample.sampleId)
+        "/samples/" + encodeURIComponent(sample.sampleId),
       );
     });
   });

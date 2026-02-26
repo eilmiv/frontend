@@ -9,11 +9,19 @@ const reducer = createReducer(
   initialPublishedDataState,
 
   on(
+    fromActions.fetchPublishedDataConfigCompleteAction,
+    (state, { publishedDataConfig }): PublishedDataState => ({
+      ...state,
+      publishedDataConfig,
+    }),
+  ),
+
+  on(
     fromActions.fetchAllPublishedDataCompleteAction,
     (state, { publishedData }): PublishedDataState => ({
       ...state,
       publishedData,
-    })
+    }),
   ),
 
   on(
@@ -21,7 +29,15 @@ const reducer = createReducer(
     (state, { count }): PublishedDataState => ({
       ...state,
       totalCount: count,
-    })
+    }),
+  ),
+
+  on(
+    fromActions.savePublishedDataCompleteAction,
+    (state, { publishedData }): PublishedDataState => ({
+      ...state,
+      currentPublishedData: publishedData,
+    }),
   ),
 
   on(
@@ -29,7 +45,15 @@ const reducer = createReducer(
     (state, { publishedData }): PublishedDataState => ({
       ...state,
       currentPublishedData: publishedData,
-    })
+    }),
+  ),
+
+  on(
+    fromActions.publishPublishedDataCompleteAction,
+    (state, { publishedData }): PublishedDataState => ({
+      ...state,
+      currentPublishedData: publishedData,
+    }),
   ),
 
   on(
@@ -38,29 +62,29 @@ const reducer = createReducer(
       const skip = page * limit;
       const filters = { ...state.filters, skip, limit };
       return { ...state, filters };
-    }
+    },
   ),
 
   on(
     fromActions.sortByColumnAction,
     (state, { column, direction }): PublishedDataState => {
-      const sortField = column + (direction ? " " + direction : "");
+      const sortField = column + (direction ? ":" + direction : "");
       const filters = { ...state.filters, sortField, skip: 0 };
       return { ...state, filters };
-    }
+    },
   ),
 
   on(
     fromActions.clearPublishedDataStateAction,
     (): PublishedDataState => ({
       ...initialPublishedDataState,
-    })
-  )
+    }),
+  ),
 );
 
 export const publishedDataReducer = (
   state: PublishedDataState | undefined,
-  action: Action
+  action: Action,
 ) => {
   if (action.type.indexOf("[PublishedData]") !== -1) {
     console.log("Action came in! " + action.type);

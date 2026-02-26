@@ -1,6 +1,6 @@
 import { Component, OnInit } from "@angular/core";
 import { Store } from "@ngrx/store";
-import { Policy, DatasetApi } from "shared/sdk";
+import { DatasetsService, Policy } from "@scicatproject/scicat-sdk-ts-angular";
 import {
   TableColumn,
   PageChangeEvent,
@@ -33,6 +33,7 @@ import { GenericFilters } from "state-management/models";
   selector: "app-policies-dashboard",
   templateUrl: "./policies-dashboard.component.html",
   styleUrls: ["./policies-dashboard.component.scss"],
+  standalone: false,
 })
 export class PoliciesDashboardComponent implements OnInit {
   vm$ = this.store.select(selectPoliciesDashboardPageViewModel);
@@ -75,10 +76,10 @@ export class PoliciesDashboardComponent implements OnInit {
   ];
 
   constructor(
-    private datasetApi: DatasetApi,
+    private datasetService: DatasetsService,
     public dialog: MatDialog,
     private router: Router,
-    private store: Store
+    private store: Store,
   ) {}
 
   onTabChange(event: MatTabChangeEvent) {
@@ -125,21 +126,24 @@ export class PoliciesDashboardComponent implements OnInit {
 
   onPoliciesPageChange(event: PageChangeEvent) {
     this.store.dispatch(
-      changePageAction({ page: event.pageIndex, limit: event.pageSize })
+      changePageAction({ page: event.pageIndex, limit: event.pageSize }),
     );
     this.updatePoliciesRouterState();
   }
 
   onEditablePoliciesPageChange(event: PageChangeEvent) {
     this.store.dispatch(
-      changeEditablePageAction({ page: event.pageIndex, limit: event.pageSize })
+      changeEditablePageAction({
+        page: event.pageIndex,
+        limit: event.pageSize,
+      }),
     );
     this.updateEditableRouterState();
   }
 
   onPoliciesSortChange(event: SortChangeEvent) {
     this.store.dispatch(
-      sortByColumnAction({ column: event.active, direction: event.direction })
+      sortByColumnAction({ column: event.active, direction: event.direction }),
     );
     this.updatePoliciesRouterState();
   }
@@ -149,7 +153,7 @@ export class PoliciesDashboardComponent implements OnInit {
       sortEditableByColumnAction({
         column: event.active,
         direction: event.direction,
-      })
+      }),
     );
     this.updateEditableRouterState();
   }
@@ -188,12 +192,12 @@ export class PoliciesDashboardComponent implements OnInit {
   onDialogClose(result: any) {
     if (result) {
       this.store.dispatch(
-        submitPolicyAction({ ownerList: this.selectedGroups, policy: result })
+        submitPolicyAction({ ownerList: this.selectedGroups, policy: result }),
       );
       // if datasets already exist
       this.selectedGroups.forEach((group) => {
-        this.datasetApi
-          .count({ ownerGroup: group })
+        this.datasetService
+          .datasetsControllerCountV3(`{ "ownerGroup": "${group}" }`)
           .pipe(
             map((count) => {
               if (count) {
@@ -204,14 +208,14 @@ export class PoliciesDashboardComponent implements OnInit {
                   confirm(
                     "Apply group " +
                       group +
-                      " policy settings to existing datasets?"
+                      " policy settings to existing datasets?",
                   )
                 ) {
+                  console.log("count", count);
                 }
-                console.log("count", count);
               }
               return null;
-            })
+            }),
           )
           .subscribe();
         this.store.dispatch(clearSelectionAction());

@@ -1,0 +1,198 @@
+import {
+  ComponentFixture,
+  TestBed,
+  fakeAsync,
+  tick,
+} from "@angular/core/testing";
+import { NO_ERRORS_SCHEMA } from "@angular/core";
+import { of } from "rxjs";
+import { ProposalSideFilterComponent } from "./proposal-side-filter.component";
+import { Store } from "@ngrx/store";
+import { ActivatedRoute, Router } from "@angular/router";
+import { DateTime } from "luxon";
+import { TranslateService } from "@ngx-translate/core";
+import { SharedScicatFrontendModule } from "shared/shared.module";
+import { AppConfigService } from "app-config.service";
+
+describe("ProposalSideFilterComponent", () => {
+  let component: ProposalSideFilterComponent;
+  let fixture: ComponentFixture<ProposalSideFilterComponent>;
+  let mockStore: any;
+  let mockRoute: any;
+  let mockRouter: any;
+
+  beforeEach(async () => {
+    mockStore = {
+      select: jasmine.createSpy("select").and.returnValue(
+        of([
+          { _id: "1", label: "A", count: 2 },
+          { _id: "2", label: "B", count: 1 },
+        ]),
+      ),
+      dispatch: jasmine.createSpy("dispatch"),
+    };
+    mockRoute = { snapshot: { queryParams: {} } };
+    mockRouter = { navigate: jasmine.createSpy("navigate") };
+    const getConfig = () => ({
+      checkBoxFilterClickTrigger: false,
+      defaultProposalsListSettings: {
+        filters: [
+          {
+            key: "instrumentIds",
+            type: "checkbox",
+            description: "Filter by Unique identifier for the proposal",
+            enabled: true,
+          },
+          {
+            key: "pi_lastname",
+            type: "checkbox",
+            description: "Filter by Last name of the Principal Investigator",
+            enabled: true,
+          },
+          {
+            key: "startTime",
+            type: "dateRange",
+            description: "Filter by Start time of the proposal",
+            enabled: true,
+          },
+        ],
+      },
+    });
+
+    await TestBed.configureTestingModule({
+      imports: [SharedScicatFrontendModule],
+      declarations: [ProposalSideFilterComponent],
+      providers: [
+        { provide: Store, useValue: mockStore },
+        { provide: ActivatedRoute, useValue: mockRoute },
+        { provide: Router, useValue: mockRouter },
+        { provide: TranslateService, useValue: { instant: (k: string) => k } },
+        { provide: AppConfigService, useValue: { getConfig } },
+      ],
+      schemas: [NO_ERRORS_SCHEMA],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(ProposalSideFilterComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  it("should create", () => {
+    expect(component).toBeTruthy();
+  });
+
+  it("should have collapsed false by default", () => {
+    expect(component.collapsed).toBeFalse();
+  });
+
+  it("should initialize filterLists correctly", () => {
+    expect(component.filterLists.length).toBe(3);
+    expect(component.filterLists[0].key).toBe("instrumentIds");
+    expect(component.filterLists[2].type).toBe("dateRange");
+  });
+
+  it("should toggle collapsed from false to true", () => {
+    component.collapsed = false;
+    component.toggleCollapse();
+    expect(component.collapsed).toBeTrue();
+  });
+
+  it("should toggle collapsed from true to false", () => {
+    component.collapsed = true;
+    component.toggleCollapse();
+    expect(component.collapsed).toBeFalse();
+  });
+
+  it("should initialize activeFilters from queryParams.searchQuery in ngOnInit", () => {
+    const data = { alpha: ["beta"] };
+    mockRoute.snapshot.queryParams = { searchQuery: JSON.stringify(data) };
+    component.activeFilters = {};
+    component.ngOnInit();
+    expect(component.activeFilters).toEqual(data);
+  });
+
+  it("should set a filter when value is provided", () => {
+    component.activeFilters = {};
+    component.setFilter("instrumentIds", ["test123"]);
+    expect(component.activeFilters.instrumentIds).toEqual(["test123"]);
+  });
+
+  it("should remove a filter when value is empty", () => {
+    component.activeFilters = { instrumentIds: ["test123"] };
+    component.setFilter("instrumentIds", []);
+    expect("instrumentIds" in component.activeFilters).toBeFalse();
+  });
+
+  it("should set a date filter when begin or end is provided", () => {
+    const range = { begin: DateTime.now().toISO(), end: null };
+    component.activeFilters = {};
+    component.setDateFilter("created", range);
+    expect(component.activeFilters.created).toEqual({
+      begin: range.begin,
+      end: range.end,
+    });
+  });
+
+  it("should remove a date filter when neither begin nor end is provided", () => {
+    component.activeFilters = {
+      startTime: { begin: DateTime.now().toISO(), end: DateTime.now().toISO() },
+    };
+    component.setDateFilter("startTime", { begin: null, end: null });
+    expect("startTime" in component.activeFilters).toBeFalse();
+  });
+
+  it("should apply filters and navigate with correct queryParams", () => {
+    component.activeFilters = { a: ["1"] };
+    mockRoute.snapshot.queryParams = {
+      searchQuery: JSON.stringify({ text: "hello" }),
+    };
+    component.applyFilters();
+    expect(mockRouter.navigate).toHaveBeenCalledWith([], {
+      queryParams: {
+        searchQuery: JSON.stringify({ a: ["1"], text: "hello" }),
+        pageIndex: 0,
+      },
+      queryParamsHandling: "merge",
+    });
+  });
+
+  it("getFacetCounts$ should return counts array if selector has values", (done) => {
+    component.getFacetCounts$("instrumentIds").subscribe((counts) => {
+      expect(counts).toEqual([
+        { _id: "1", label: "A", count: 2 },
+        { _id: "2", label: "B", count: 1 },
+      ]);
+      done();
+    });
+  });
+
+  it("getFacetCounts$ should return empty array if selector has no values", (done) => {
+    mockStore.select.and.returnValue(of([]));
+    component.getFacetCounts$("bar").subscribe((counts) => {
+      expect(counts).toEqual([]);
+      done();
+    });
+  });
+
+  it("should reset filters, call applyFilters and toggle clearFilters flag", fakeAsync(() => {
+    component.activeFilters = { x: ["y"] };
+    spyOn(component, "applyFilters");
+    component.clearFilters = false;
+
+    component.reset();
+    expect(component.activeFilters).toEqual({});
+    expect(component.clearFilters).toBeTrue();
+    expect(component.applyFilters).toHaveBeenCalled();
+
+    tick(0);
+    expect(component.clearFilters).toBeFalse();
+  }));
+
+  it("should call applyFilters on setFilter if checkBoxFilterClickTrigger is true", () => {
+    component.appConfig.checkBoxFilterClickTrigger = true;
+
+    spyOn(component, "applyFilters");
+    component.setFilter("proposalId", ["test123"]);
+    expect(component.applyFilters).toHaveBeenCalled();
+  });
+});

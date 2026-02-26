@@ -10,7 +10,7 @@ import { MatIconModule } from "@angular/material/icon";
 import { MatPaginatorModule } from "@angular/material/paginator";
 import { MatSortModule } from "@angular/material/sort";
 import { MatTableModule } from "@angular/material/table";
-import { FlexLayoutModule } from "@angular/flex-layout";
+import { FlexLayoutModule } from "@ngbracket/ngx-layout";
 import { LinkyModule } from "ngx-linky";
 import { RouterModule } from "@angular/router";
 import { SharedScicatFrontendModule } from "shared/shared.module";
@@ -26,7 +26,7 @@ import { StoreModule } from "@ngrx/store";
     LogbooksTableComponent,
     LogbooksDetailComponent,
     LogbookFilterComponent,
-    LogbooksDashboardComponent
+    LogbooksDashboardComponent,
   ],
   imports: [
     CommonModule,
@@ -43,14 +43,14 @@ import { StoreModule } from "@ngrx/store";
     MatTableModule,
     RouterModule,
     SharedScicatFrontendModule,
-    StoreModule.forFeature("logbooks", logbooksReducer)
+    StoreModule.forFeature("logbooks", logbooksReducer),
   ],
   providers: [],
   exports: [
     LogbooksTableComponent,
     LogbooksDetailComponent,
     LogbooksDashboardComponent,
-    LogbookFilterComponent
-  ]
+    LogbookFilterComponent,
+  ],
 })
 export class LogbooksModule {}

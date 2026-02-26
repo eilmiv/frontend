@@ -1,13 +1,18 @@
 import { Injectable } from "@angular/core";
-import { Actions, createEffect, ofType, concatLatestFrom } from "@ngrx/effects";
-import { DatasetApi, SampleApi, Sample, Dataset } from "shared/sdk";
+import { Actions, createEffect, ofType } from "@ngrx/effects";
+import { concatLatestFrom } from "@ngrx/operators";
+import {
+  CreateSubAttachmentV3Dto,
+  DatasetsService,
+  SamplesService,
+} from "@scicatproject/scicat-sdk-ts-angular";
 import { Store } from "@ngrx/store";
 import {
   selectFullqueryParams,
   selectDatasetsQueryParams,
 } from "state-management/selectors/samples.selectors";
 import * as fromActions from "state-management/actions/samples.actions";
-import { mergeMap, map, catchError, switchMap } from "rxjs/operators";
+import { mergeMap, map, catchError, switchMap, filter } from "rxjs/operators";
 import { of } from "rxjs";
 import {
   loadingAction,
@@ -21,23 +26,23 @@ export class SampleEffects {
 
   fetchSamples$ = createEffect(() => {
     return this.actions$.pipe(
-      ofType(
-        fromActions.fetchSamplesAction,
-        fromActions.changePageAction,
-        fromActions.sortByColumnAction,
-        fromActions.setTextFilterAction
-      ),
+      ofType(fromActions.fetchSamplesAction),
       concatLatestFrom(() => this.fullqueryParams$),
       map(([action, params]) => params),
       mergeMap(({ query, limits }) =>
-        this.sampleApi.fullquery(query, limits).pipe(
-          mergeMap((samples) => [
-            fromActions.fetchSamplesCompleteAction({ samples }),
-            fromActions.fetchSamplesCountAction(),
-          ]),
-          catchError(() => of(fromActions.fetchSamplesFailedAction()))
-        )
-      )
+        this.sampleApi
+          .samplesControllerFullqueryV3(
+            JSON.stringify(limits),
+            JSON.stringify(query),
+          )
+          .pipe(
+            mergeMap((samples) => [
+              fromActions.fetchSamplesCompleteAction({ samples }),
+              fromActions.fetchSamplesCountAction(),
+            ]),
+            catchError(() => of(fromActions.fetchSamplesFailedAction())),
+          ),
+      ),
     );
   });
 
@@ -47,15 +52,15 @@ export class SampleEffects {
       concatLatestFrom(() => this.fullqueryParams$),
       map(([action, params]) => params),
       mergeMap(({ query }) =>
-        this.sampleApi.fullquery(query).pipe(
-          map((samples) =>
+        this.sampleApi.samplesControllerCountV3(JSON.stringify(query)).pipe(
+          map(({ count }) =>
             fromActions.fetchSamplesCountCompleteAction({
-              count: samples.length,
-            })
+              count,
+            }),
           ),
-          catchError(() => of(fromActions.fetchSamplesCountFailedAction()))
-        )
-      )
+          catchError(() => of(fromActions.fetchSamplesCountFailedAction())),
+        ),
+      ),
     );
   });
 
@@ -65,15 +70,20 @@ export class SampleEffects {
       concatLatestFrom(() => this.fullqueryParams$),
       map(([action, params]) => params),
       mergeMap(({ query }) => {
-        const parsedQuery = JSON.parse(query);
-        parsedQuery.metadataKey = "";
-        return this.sampleApi.metadataKeys(JSON.stringify(parsedQuery)).pipe(
-          map((metadataKeys) =>
-            fromActions.fetchMetadataKeysCompleteAction({ metadataKeys })
-          ),
-          catchError(() => of(fromActions.fetchMetadataKeysFailedAction()))
-        );
-      })
+        const limits = {};
+        const metadataKeysQuery = { ...query, metadataKey: "" };
+        return this.sampleApi
+          .samplesControllerMetadataKeysV3(
+            JSON.stringify(limits),
+            JSON.stringify(metadataKeysQuery),
+          )
+          .pipe(
+            map((metadataKeys) =>
+              fromActions.fetchMetadataKeysCompleteAction({ metadataKeys }),
+            ),
+            catchError(() => of(fromActions.fetchMetadataKeysFailedAction())),
+          );
+      }),
     );
   });
 
@@ -81,19 +91,37 @@ export class SampleEffects {
     return this.actions$.pipe(
       ofType(fromActions.fetchSampleAction),
       switchMap(({ sampleId }) => {
-        const sampleFilter = {
-          where: {
-            sampleId,
-          },
-          include: [{ relation: "attachments" }],
-        };
-        return this.sampleApi.findOne<Sample>(sampleFilter).pipe(
-          map((sample: Sample) =>
-            fromActions.fetchSampleCompleteAction({ sample })
+        return this.sampleApi.samplesControllerFindByIdAccessV3(sampleId).pipe(
+          filter((permission) => permission.canAccess),
+          switchMap(() =>
+            this.sampleApi.samplesControllerFindByIdV3(sampleId).pipe(
+              map((sample) =>
+                fromActions.fetchSampleCompleteAction({ sample }),
+              ),
+              catchError(() => of(fromActions.fetchSampleFailedAction())),
+            ),
           ),
-          catchError(() => of(fromActions.fetchSampleFailedAction()))
+          catchError(() => of(fromActions.fetchSampleAccessFailedAction())),
         );
-      })
+      }),
+    );
+  });
+
+  fetchSampleAttachments$ = createEffect(() => {
+    return this.actions$.pipe(
+      ofType(fromActions.fetchSampleAttachmentsAction),
+      switchMap(({ sampleId }) => {
+        return this.sampleApi
+          .samplesControllerFindAllAttachmentsV3(sampleId)
+          .pipe(
+            map((attachments) =>
+              fromActions.fetchSampleAttachmentsCompleteAction({ attachments }),
+            ),
+            catchError(() =>
+              of(fromActions.fetchSampleAttachmentsFailedAction()),
+            ),
+          );
+      }),
     );
   });
 
@@ -103,15 +131,22 @@ export class SampleEffects {
       concatLatestFrom(() => this.datasetsQueryParams$),
       mergeMap(([{ sampleId }, { order, skip, limit }]) =>
         this.datasetApi
-          .find<Dataset>({ where: { sampleId }, order, skip, limit })
+          .datasetsControllerFindAllV3(
+            JSON.stringify({
+              where: { sampleId },
+              order,
+              skip,
+              limit,
+            }),
+          )
           .pipe(
-            mergeMap((datasets: Dataset[]) => [
+            mergeMap((datasets) => [
               fromActions.fetchSampleDatasetsCompleteAction({ datasets }),
               fromActions.fetchSampleDatasetsCountAction({ sampleId }),
             ]),
-            catchError(() => of(fromActions.fetchSampleDatasetsFailedAction()))
-          )
-      )
+            catchError(() => of(fromActions.fetchSampleDatasetsFailedAction())),
+          ),
+      ),
     );
   });
 
@@ -119,17 +154,19 @@ export class SampleEffects {
     return this.actions$.pipe(
       ofType(fromActions.fetchSampleDatasetsCountAction),
       switchMap(({ sampleId }) =>
-        this.datasetApi.find({ where: { sampleId } }).pipe(
-          map((datasets) =>
-            fromActions.fetchSampleDatasetsCountCompleteAction({
-              count: datasets.length,
-            })
+        this.datasetApi
+          .datasetsControllerFindAllV3(JSON.stringify({ where: { sampleId } }))
+          .pipe(
+            map((datasets) =>
+              fromActions.fetchSampleDatasetsCountCompleteAction({
+                count: datasets.length,
+              }),
+            ),
+            catchError(() =>
+              of(fromActions.fetchSampleDatasetsCountFailedAction()),
+            ),
           ),
-          catchError(() =>
-            of(fromActions.fetchSampleDatasetsCountFailedAction())
-          )
-        )
-      )
+      ),
     );
   });
 
@@ -138,16 +175,16 @@ export class SampleEffects {
       ofType(fromActions.saveCharacteristicsAction),
       switchMap(({ sampleId, characteristics }) =>
         this.sampleApi
-          .patchAttributes(sampleId, {
+          .samplesControllerUpdateV3(sampleId, {
             sampleCharacteristics: characteristics,
           })
           .pipe(
-            map((sample: Sample) =>
-              fromActions.saveCharacteristicsCompleteAction({ sample })
+            map((sample) =>
+              fromActions.saveCharacteristicsCompleteAction({ sample }),
             ),
-            catchError(() => of(fromActions.saveCharacteristicsFailedAction()))
-          )
-      )
+            catchError(() => of(fromActions.saveCharacteristicsFailedAction())),
+          ),
+      ),
     );
   });
 
@@ -155,14 +192,14 @@ export class SampleEffects {
     return this.actions$.pipe(
       ofType(fromActions.addSampleAction),
       mergeMap(({ sample }) =>
-        this.sampleApi.create(sample).pipe(
+        this.sampleApi.samplesControllerCreateV3(sample).pipe(
           mergeMap((res) => [
             fromActions.addSampleCompleteAction({ sample: res }),
             fromActions.fetchSamplesAction(),
           ]),
-          catchError(() => of(fromActions.addSampleFailedAction()))
-        )
-      )
+          catchError(() => of(fromActions.addSampleFailedAction())),
+        ),
+      ),
     );
   });
 
@@ -170,48 +207,19 @@ export class SampleEffects {
     return this.actions$.pipe(
       ofType(fromActions.addAttachmentAction),
       switchMap(({ attachment }) => {
-        const {
-          id,
-          datasetId,
-          rawDatasetId,
-          derivedDatasetId,
-          proposalId,
-          ...theRest
-        } = attachment;
+        const { id, datasetId, proposalId, ...theRest } = attachment;
         return this.sampleApi
-          .createAttachments(encodeURIComponent(theRest.sampleId!), theRest)
-          .pipe(
-            map((res) =>
-              fromActions.addAttachmentCompleteAction({ attachment: res })
-            ),
-            catchError(() => of(fromActions.addAttachmentFailedAction()))
-          );
-      })
-    );
-  });
-
-  updateAttachmentCaption$ = createEffect(() => {
-    return this.actions$.pipe(
-      ofType(fromActions.updateAttachmentCaptionAction),
-      switchMap(({ sampleId, attachmentId, caption }) => {
-        const newCaption = { caption };
-        return this.sampleApi
-          .updateByIdAttachments(
-            encodeURIComponent(sampleId),
-            encodeURIComponent(attachmentId),
-            newCaption
+          .samplesControllerCreateAttachmentsV3(
+            theRest.sampleId,
+            theRest as CreateSubAttachmentV3Dto,
           )
           .pipe(
             map((res) =>
-              fromActions.updateAttachmentCaptionCompleteAction({
-                attachment: res,
-              })
+              fromActions.addAttachmentCompleteAction({ attachment: res }),
             ),
-            catchError(() =>
-              of(fromActions.updateAttachmentCaptionFailedAction())
-            )
+            catchError(() => of(fromActions.addAttachmentFailedAction())),
           );
-      })
+      }),
     );
   });
 
@@ -220,17 +228,14 @@ export class SampleEffects {
       ofType(fromActions.removeAttachmentAction),
       switchMap(({ sampleId, attachmentId }) =>
         this.sampleApi
-          .destroyByIdAttachments(
-            encodeURIComponent(sampleId),
-            encodeURIComponent(attachmentId)
-          )
+          .samplesControllerFindOneAttachmentAndRemoveV3(sampleId, attachmentId)
           .pipe(
             map(() =>
-              fromActions.removeAttachmentCompleteAction({ attachmentId })
+              fromActions.removeAttachmentCompleteAction({ attachmentId }),
             ),
-            catchError(() => of(fromActions.removeAttachmentFailedAction()))
-          )
-      )
+            catchError(() => of(fromActions.removeAttachmentFailedAction())),
+          ),
+      ),
     );
   });
 
@@ -246,9 +251,9 @@ export class SampleEffects {
         fromActions.saveCharacteristicsAction,
         fromActions.addAttachmentAction,
         fromActions.updateAttachmentCaptionAction,
-        fromActions.removeAttachmentAction
+        fromActions.removeAttachmentAction,
       ),
-      switchMap(() => of(loadingAction()))
+      switchMap(() => of(loadingAction())),
     );
   });
 
@@ -274,16 +279,16 @@ export class SampleEffects {
         fromActions.updateAttachmentCaptionCompleteAction,
         fromActions.updateAttachmentCaptionFailedAction,
         fromActions.removeAttachmentCompleteAction,
-        fromActions.removeAttachmentFailedAction
+        fromActions.removeAttachmentFailedAction,
       ),
-      switchMap(() => of(loadingCompleteAction()))
+      switchMap(() => of(loadingCompleteAction())),
     );
   });
 
   constructor(
     private actions$: Actions,
-    private datasetApi: DatasetApi,
-    private sampleApi: SampleApi,
-    private store: Store
+    private datasetApi: DatasetsService,
+    private sampleApi: SamplesService,
+    private store: Store,
   ) {}
 }

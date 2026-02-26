@@ -2,7 +2,6 @@ import { Injectable } from "@angular/core";
 import { Store } from "@ngrx/store";
 import { combineLatest, Observable } from "rxjs";
 import { first, map } from "rxjs/operators";
-import { Dataset, Job, User } from "state-management/models";
 import { submitJobAction } from "state-management/actions/jobs.actions";
 import {
   selectCurrentUser,
@@ -10,6 +9,10 @@ import {
   selectProfile,
 } from "state-management/selectors/user.selectors";
 import { RetrieveDestinations } from "app-config.service";
+import {
+  OutputDatasetObsoleteDto,
+  ReturnedUserDto,
+} from "@scicatproject/scicat-sdk-ts-angular";
 
 @Injectable()
 export class ArchivingService {
@@ -19,12 +22,12 @@ export class ArchivingService {
   constructor(private store: Store) {}
 
   private createJob(
-    user: User,
-    datasets: Dataset[],
+    user: ReturnedUserDto,
+    datasets: OutputDatasetObsoleteDto[],
     archive: boolean,
-    destinationPath?: Record<string, string>
+    destinationPath?: Record<string, string>,
     // Do not specify tape copies here
-  ): Job {
+  ) {
     const extra = archive ? {} : destinationPath;
     const jobParams = {
       username: user.username,
@@ -38,7 +41,6 @@ export class ArchivingService {
     const data = {
       jobParams,
       emailJobInitiator: user.email,
-      creationTime: new Date(),
       // Revise this, files == []...? See earlier version of this method in dataset-table component for context
       datasetList: datasets.map((dataset) => ({
         pid: dataset.pid,
@@ -47,13 +49,13 @@ export class ArchivingService {
       type: archive ? "archive" : "retrieve",
     };
 
-    return new Job(data);
+    return data;
   }
 
   private archiveOrRetrieve(
-    datasets: Dataset[],
+    datasets: OutputDatasetObsoleteDto[],
     archive: boolean,
-    destPath?: Record<string, string>
+    destPath?: Record<string, string>,
   ): Observable<void> {
     return combineLatest([this.currentUser$, this.tapeCopies$]).pipe(
       first(),
@@ -62,7 +64,7 @@ export class ArchivingService {
           const email = user.email;
           if (email == null || email.length === 0) {
             throw new Error(
-              "No email for this user could be found, the job will not be submitted"
+              "No email for this user could be found, the job will not be submitted",
             );
           }
 
@@ -72,30 +74,30 @@ export class ArchivingService {
 
           const job = this.createJob(user, datasets, archive, destPath);
 
-          this.store.dispatch(submitJobAction({ job }));
+          this.store.dispatch(submitJobAction({ job: job as any }));
         }
-      })
+      }),
     );
   }
 
-  public archive(datasets: Dataset[]): Observable<void> {
+  public archive(datasets: OutputDatasetObsoleteDto[]): Observable<void> {
     return this.archiveOrRetrieve(datasets, true);
   }
 
   public retrieve(
-    datasets: Dataset[],
-    destinationPath: Record<string, string>
+    datasets: OutputDatasetObsoleteDto[],
+    destinationPath: Record<string, string>,
   ): Observable<void> {
     return this.archiveOrRetrieve(datasets, false, destinationPath);
   }
 
   public generateOptionLocation(
     result: RetrieveDestinations,
-    retrieveDestinations: RetrieveDestinations[] = []
-  ): {} | { option: string } | { location: string; option: string } {
+    retrieveDestinations: RetrieveDestinations[] = [],
+  ): object | { option: string } | { location: string; option: string } {
     if (retrieveDestinations.length > 0) {
       const prefix = retrieveDestinations.filter(
-        (element) => element.option == result.option
+        (element) => element.option == result.option,
       );
       let location =
         prefix.length > 0
@@ -115,17 +117,17 @@ export class ArchivingService {
   }
 
   public retriveDialogOptions(
-    retrieveDestinations: RetrieveDestinations[] = []
+    retrieveDestinations: RetrieveDestinations[] = [],
   ): object {
     return {
       width: "auto",
       data: {
-        title: "Really retrieve?",
+        title: "Retrieve to",
         question: "",
         choice: {
-          title: "Optionally select destination",
           options: retrieveDestinations,
         },
+        option: retrieveDestinations?.[0]?.option,
       },
     };
   }

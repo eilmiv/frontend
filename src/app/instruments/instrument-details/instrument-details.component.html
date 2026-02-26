@@ -8,49 +8,84 @@
           </div>
           General Information
         </mat-card-header>
-        <div class="details">
-          <table>
-            <tr *ngIf="instrument.name as value">
-              <th>Name</th>
-              <td>{{ value }}</td>
-            </tr>
-            <tr *ngIf="instrument.pid as value">
-              <th>PID</th>
-              <td>{{ value }}</td>
-            </tr>
-          </table>
-        </div>
-      </mat-card>
-
-      <mat-card *ngIf="instrument.customMetadata as value">
-        <mat-card-header class="customMetadata-header">
-          <div mat-card-avatar class="section-icon">
-            <mat-icon> science </mat-icon>
+        <mat-card-content>
+          <div class="details">
+            <table>
+              <tr *ngIf="instrument.uniqueName as value">
+                <th>Unique Name</th>
+                <td>{{ value }}</td>
+              </tr>
+              <tr *ngIf="instrument.name as value">
+                <th>Name</th>
+                <td>{{ value }}</td>
+              </tr>
+              <tr *ngIf="instrument.pid as value">
+                <th>PID</th>
+                <td>{{ value }}</td>
+              </tr>
+            </table>
           </div>
-          Custom Metadata
-        </mat-card-header>
-
-        <mat-tab-group>
-          <mat-tab>
-            <ng-template mat-tab-label>
-              <mat-icon>list</mat-icon> View
-            </ng-template>
-
-            <metadata-view [metadata]="value"></metadata-view>
-          </mat-tab>
-
-          <mat-tab>
-            <ng-template mat-tab-label>
-              <mat-icon>edit</mat-icon> Edit
-            </ng-template>
-
-            <metadata-edit
-              [metadata]="value"
-              (save)="onSaveCustomMetadata(instrument.pid, $event)"
-            ></metadata-edit>
-          </mat-tab>
-        </mat-tab-group>
+        </mat-card-content>
       </mat-card>
+
+      <ng-container *ngIf="emptyMetadataTable()">
+        <mat-card
+          data-cy="instrument-metadata-card"
+          *ngIf="instrument.customMetadata as value"
+        >
+          <mat-card-header class="customMetadata-header">
+            <div mat-card-avatar class="section-icon">
+              <mat-icon> science </mat-icon>
+            </div>
+            Custom Metadata
+          </mat-card-header>
+
+          <mat-card-content>
+            <mat-tab-group>
+              <mat-tab>
+                <ng-template mat-tab-label>
+                  <mat-icon>list</mat-icon> View
+                </ng-template>
+
+                <ng-template matTabContent>
+                  <div [ngSwitch]="appConfig.metadataStructure">
+                    <tree-view
+                      *ngSwitchCase="'tree'"
+                      [metadata]="value"
+                    ></tree-view>
+                    <metadata-view
+                      *ngSwitchDefault
+                      [metadata]="value"
+                    ></metadata-view>
+                  </div>
+                </ng-template>
+              </mat-tab>
+
+              <mat-tab *ngIf="isAdmin$ | async">
+                <ng-template mat-tab-label>
+                  <mat-icon>edit</mat-icon> Edit
+                </ng-template>
+
+                <ng-template matTabContent>
+                  <div [ngSwitch]="appConfig.metadataStructure">
+                    <tree-edit
+                      *ngSwitchCase="'tree'"
+                      [metadata]="value"
+                      (save)="onSaveCustomMetadata(instrument.pid, $event)"
+                      (hasUnsavedChanges)="onHasUnsavedChanges($event)"
+                    ></tree-edit>
+                    <metadata-edit
+                      *ngSwitchDefault
+                      [metadata]="value"
+                      (save)="onSaveCustomMetadata(instrument.pid, $event)"
+                    ></metadata-edit>
+                  </div>
+                </ng-template>
+              </mat-tab>
+            </mat-tab-group>
+          </mat-card-content>
+        </mat-card>
+      </ng-container>
     </div>
   </div>
 </ng-container>

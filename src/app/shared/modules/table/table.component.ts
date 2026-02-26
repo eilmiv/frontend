@@ -1,4 +1,11 @@
-import { Component, OnInit, Input, Output, EventEmitter, ViewEncapsulation } from "@angular/core";
+import {
+  Component,
+  OnInit,
+  Input,
+  Output,
+  EventEmitter,
+  ViewEncapsulation,
+} from "@angular/core";
 import { SelectionModel } from "@angular/cdk/collections";
 import { MatCheckboxChange } from "@angular/material/checkbox";
 
@@ -32,6 +39,7 @@ export interface CheckboxEvent {
   templateUrl: "./table.component.html",
   styleUrls: ["./table.component.scss"],
   encapsulation: ViewEncapsulation.None,
+  standalone: false,
 })
 export class TableComponent implements OnInit {
   @Input() data: any[] | null = [];

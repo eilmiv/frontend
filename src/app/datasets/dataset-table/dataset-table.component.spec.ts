@@ -1,8 +1,16 @@
+/* eslint @typescript-eslint/no-empty-function:0 */
+
 import {
   DatasetTableComponent,
   SortChangeEvent,
 } from "./dataset-table.component";
-import { MockStore, MockDatasetApi } from "shared/MockStubs";
+import {
+  MockStore,
+  MockDatasetApi,
+  mockDataset,
+  createMock,
+  MockActivatedRoute,
+} from "shared/MockStubs";
 import { NO_ERRORS_SCHEMA } from "@angular/core";
 import {
   ComponentFixture,
@@ -11,23 +19,17 @@ import {
   waitForAsync,
 } from "@angular/core/testing";
 import { StoreModule, Store } from "@ngrx/store";
-import { Dataset, DatasetApi } from "shared/sdk";
 import { SharedScicatFrontendModule } from "shared/shared.module";
 import {
   selectDatasetAction,
   deselectDatasetAction,
   selectAllDatasetsAction,
   clearSelectionAction,
-  changePageAction,
   sortByColumnAction,
 } from "state-management/actions/datasets.actions";
-import { PageChangeEvent } from "shared/modules/table/table.component";
 import { provideMockStore } from "@ngrx/store/testing";
 import { selectDatasets } from "state-management/selectors/datasets.selectors";
-import {
-  selectColumnAction,
-  deselectColumnAction,
-} from "state-management/actions/user.actions";
+import { selectInstruments } from "state-management/selectors/instruments.selectors";
 import { MatTableModule } from "@angular/material/table";
 import {
   MatCheckboxChange,
@@ -38,8 +40,26 @@ import { MatIconModule } from "@angular/material/icon";
 import { MatPaginatorModule } from "@angular/material/paginator";
 import { BrowserAnimationsModule } from "@angular/platform-browser/animations";
 import { AppConfigService } from "app-config.service";
+import {
+  DatasetClass,
+  DatasetsService,
+} from "@scicatproject/scicat-sdk-ts-angular";
+import { RowEventType } from "shared/modules/dynamic-material-table/models/table-row.model";
+import { ActivatedRoute } from "@angular/router";
+import { JsonHeadPipe } from "shared/pipes/json-head.pipe";
+import { DatePipe } from "@angular/common";
+import { FileSizePipe } from "shared/pipes/filesize.pipe";
+import { TitleCasePipe } from "shared/pipes/title-case.pipe";
+import { TranslateService } from "@ngx-translate/core";
 
 const getConfig = () => ({});
+
+const auditFields = {
+  createdAt: "",
+  createdBy: "",
+  updatedAt: "",
+  updatedBy: "",
+};
 
 describe("DatasetTableComponent", () => {
   let component: DatasetTableComponent;
@@ -48,46 +68,52 @@ describe("DatasetTableComponent", () => {
   let store: MockStore;
   let dispatchSpy;
 
-  beforeEach(
-    waitForAsync(() => {
-      TestBed.configureTestingModule({
-        schemas: [NO_ERRORS_SCHEMA],
-        imports: [
-          BrowserAnimationsModule,
-          MatButtonModule,
-          MatCheckboxModule,
-          MatIconModule,
-          MatPaginatorModule,
-          MatTableModule,
-          SharedScicatFrontendModule,
-          StoreModule.forRoot({}),
-        ],
-        providers: [
-          provideMockStore({
-            selectors: [{ selector: selectDatasets, value: [] }],
-          }),
-        ],
-        declarations: [DatasetTableComponent],
-      });
-      TestBed.overrideComponent(DatasetTableComponent, {
-        set: {
-          providers: [
-            {
-              provide: AppConfigService,
-              useValue: { getConfig },
-            },
-            { provide: DatasetApi, useClass: MockDatasetApi },
+  beforeEach(waitForAsync(() => {
+    TestBed.configureTestingModule({
+      schemas: [NO_ERRORS_SCHEMA],
+      imports: [
+        BrowserAnimationsModule,
+        MatButtonModule,
+        MatCheckboxModule,
+        MatIconModule,
+        MatPaginatorModule,
+        MatTableModule,
+        SharedScicatFrontendModule,
+        StoreModule.forRoot({}),
+      ],
+      providers: [
+        provideMockStore({
+          selectors: [
+            { selector: selectDatasets, value: [] },
+            { selector: selectInstruments, value: [] },
           ],
-        },
-      });
-      TestBed.compileComponents();
-    })
-  );
+        }),
+        { provide: TranslateService, useValue: { instant: (k: string) => k } },
+        JsonHeadPipe,
+        DatePipe,
+        FileSizePipe,
+        TitleCasePipe,
+      ],
+      declarations: [DatasetTableComponent],
+    });
+    TestBed.overrideComponent(DatasetTableComponent, {
+      set: {
+        providers: [
+          {
+            provide: AppConfigService,
+            useValue: { getConfig },
+          },
+          { provide: DatasetsService, useClass: MockDatasetApi },
+          { provide: ActivatedRoute, useClass: MockActivatedRoute },
+        ],
+      },
+    });
+    TestBed.compileComponents();
+  }));
 
   beforeEach(() => {
     fixture = TestBed.createComponent(DatasetTableComponent);
     component = fixture.componentInstance;
-    component.tableColumns = [];
     fixture.detectChanges();
   });
 
@@ -103,24 +129,15 @@ describe("DatasetTableComponent", () => {
     expect(component).toBeTruthy();
   });
 
-  describe("#doSettingsClick()", () => {
-    it("should emit a MouseEvent on click", () => {
-      const emitSpy = spyOn(component.settingsClick, "emit");
-
-      const event = {} as MouseEvent;
-      component.doSettingsClick(event);
-
-      expect(emitSpy).toHaveBeenCalledTimes(1);
-      expect(emitSpy).toHaveBeenCalledWith(event);
-    });
-  });
-
   describe("#doRowClick()", () => {
     it("should emit the dataset clicked", () => {
       const emitSpy = spyOn(component.rowClick, "emit");
 
-      const dataset = new Dataset();
-      component.doRowClick(dataset);
+      const dataset = mockDataset;
+      component.onRowEvent({
+        event: RowEventType.RowClick,
+        sender: { row: dataset },
+      });
 
       expect(emitSpy).toHaveBeenCalledTimes(1);
       expect(emitSpy).toHaveBeenCalledWith(dataset);
@@ -137,7 +154,7 @@ describe("DatasetTableComponent", () => {
 
   describe("#userErrorCondition()", () => {
     it("should return true if dataset has missingFilesError", () => {
-      const dataset = new Dataset();
+      const dataset = createMock<DatasetClass>({});
       dataset.datasetlifecycle = {
         archiveStatusMessage: "missingFilesError",
       };
@@ -148,7 +165,7 @@ describe("DatasetTableComponent", () => {
     });
 
     it("should return false if dataset has no missingFilesError", () => {
-      const dataset = new Dataset();
+      const dataset = createMock<DatasetClass>({});
       dataset.datasetlifecycle = {
         archiveStatusMessage: "",
       };
@@ -161,7 +178,7 @@ describe("DatasetTableComponent", () => {
 
   describe("#archivableCondition()", () => {
     it("should return false if dataset is not archivable and retrievable and does not have a missingFilesError", () => {
-      const dataset = new Dataset();
+      const dataset = createMock<DatasetClass>({});
       dataset.datasetlifecycle = {
         archivable: false,
         retrievable: true,
@@ -174,7 +191,7 @@ describe("DatasetTableComponent", () => {
     });
 
     it("should return false if dataset is not archivable and retrievable and does have a missingFilesError", () => {
-      const dataset = new Dataset();
+      const dataset = createMock<DatasetClass>({});
       dataset.datasetlifecycle = {
         archivable: false,
         retrievable: true,
@@ -187,7 +204,7 @@ describe("DatasetTableComponent", () => {
     });
 
     it("should return false if dataset is not archivable and not retrievable and does not have a missingFilesError", () => {
-      const dataset = new Dataset();
+      const dataset = createMock<DatasetClass>({});
       dataset.datasetlifecycle = {
         archivable: false,
         retrievable: false,
@@ -200,7 +217,7 @@ describe("DatasetTableComponent", () => {
     });
 
     it("should return false if dataset is not archivable and not retrievable and does have a missingFilesError", () => {
-      const dataset = new Dataset();
+      const dataset = createMock<DatasetClass>({});
       dataset.datasetlifecycle = {
         archivable: false,
         retrievable: false,
@@ -213,7 +230,7 @@ describe("DatasetTableComponent", () => {
     });
 
     it("should return false if dataset is not archivable and retrievable and does not have a missingFilesError", () => {
-      const dataset = new Dataset();
+      const dataset = createMock<DatasetClass>({});
       dataset.datasetlifecycle = {
         archivable: false,
         retrievable: true,
@@ -226,7 +243,7 @@ describe("DatasetTableComponent", () => {
     });
 
     it("should return false if dataset is archivable and retrievable and does not have a missingFilesError", () => {
-      const dataset = new Dataset();
+      const dataset = createMock<DatasetClass>({});
       dataset.datasetlifecycle = {
         archivable: true,
         retrievable: true,
@@ -239,7 +256,7 @@ describe("DatasetTableComponent", () => {
     });
 
     it("should return false if dataset is archivable and retrievable and does have a missingFilesError", () => {
-      const dataset = new Dataset();
+      const dataset = createMock<DatasetClass>({});
       dataset.datasetlifecycle = {
         archivable: true,
         retrievable: true,
@@ -252,7 +269,7 @@ describe("DatasetTableComponent", () => {
     });
 
     it("should return true if dataset is archivable and not retrievable and does not have a missingFilesError", () => {
-      const dataset = new Dataset();
+      const dataset = createMock<DatasetClass>({});
       dataset.datasetlifecycle = {
         archivable: true,
         retrievable: false,
@@ -267,7 +284,7 @@ describe("DatasetTableComponent", () => {
 
   describe("#retrievableCondition()", () => {
     it("should return false if dataset is archivable and not retrievable", () => {
-      const dataset = new Dataset();
+      const dataset = createMock<DatasetClass>({});
       dataset.datasetlifecycle = {
         archivable: true,
         retrievable: false,
@@ -279,7 +296,7 @@ describe("DatasetTableComponent", () => {
     });
 
     it("should return false if dataset is not archivable and not retrievable", () => {
-      const dataset = new Dataset();
+      const dataset = createMock<DatasetClass>({});
       dataset.datasetlifecycle = {
         archivable: false,
         retrievable: false,
@@ -291,7 +308,7 @@ describe("DatasetTableComponent", () => {
     });
 
     it("should return false if dataset is archivable and retrievable", () => {
-      const dataset = new Dataset();
+      const dataset = createMock<DatasetClass>({});
       dataset.datasetlifecycle = {
         archivable: true,
         retrievable: true,
@@ -303,7 +320,7 @@ describe("DatasetTableComponent", () => {
     });
 
     it("should return true if dataset is retrievable and not archivable", () => {
-      const dataset = new Dataset();
+      const dataset = createMock<DatasetClass>({});
       dataset.datasetlifecycle = {
         archivable: false,
         retrievable: true,
@@ -315,52 +332,18 @@ describe("DatasetTableComponent", () => {
     });
   });
 
-  describe("#isSelected()", () => {
-    it("should return false if dataset is not selected", () => {
-      const dataset = new Dataset();
-      const selected = component.isSelected(dataset);
-
-      expect(selected).toEqual(false);
-    });
-  });
-
-  describe("#isAllSelected()", () => {
-    it("should return false if length of datasets and length of selectedSets are not equal", () => {
-      component.datasets = [new Dataset()];
-
-      const allSelected = component.isAllSelected();
-
-      expect(allSelected).toEqual(false);
-    });
-
-    it("should return true if length of datasets and length of selectedSets are equal", () => {
-      const allSelected = component.isAllSelected();
-
-      expect(allSelected).toEqual(true);
-    });
-  });
-
-  describe("#isInBatch()", () => {
-    it("should return false if dataset is not in batch", () => {
-      const dataset = new Dataset();
-      const inBatch = component.isInBatch(dataset);
-
-      expect(inBatch).toEqual(false);
-    });
-  });
-
   describe("#onSelect()", () => {
     it("should dispatch a selectDatasetAction if checked is true", () => {
       dispatchSpy = spyOn(store, "dispatch");
 
       const event = new MatCheckboxChange();
       event.checked = true;
-      const dataset = new Dataset();
+      const dataset = mockDataset;
       component.onSelect(event, dataset);
 
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        selectDatasetAction({ dataset })
+        selectDatasetAction({ dataset }),
       );
     });
 
@@ -369,12 +352,12 @@ describe("DatasetTableComponent", () => {
 
       const event = new MatCheckboxChange();
       event.checked = false;
-      const dataset = new Dataset();
+      const dataset = mockDataset;
       component.onSelect(event, dataset);
 
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        deselectDatasetAction({ dataset })
+        deselectDatasetAction({ dataset }),
       );
     });
   });
@@ -403,49 +386,6 @@ describe("DatasetTableComponent", () => {
     });
   });
 
-  describe("#onPageChange()", () => {
-    const name = "image";
-    const columnType = "standard";
-
-    it("should dispatch a changePangeAction and a selectColumnAction if pageSize is less than 50", () => {
-      dispatchSpy = spyOn(store, "dispatch");
-
-      const event: PageChangeEvent = {
-        pageIndex: 0,
-        pageSize: 25,
-        length: 25,
-      };
-      component.onPageChange(event);
-
-      expect(dispatchSpy).toHaveBeenCalledTimes(2);
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        changePageAction({ page: event.pageIndex, limit: event.pageSize })
-      );
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        selectColumnAction({ name, columnType })
-      );
-    });
-
-    it("should dispatch a changePangeAction and a deselectColumnAction if pageSize is larger than or equal to 50", () => {
-      dispatchSpy = spyOn(store, "dispatch");
-
-      const event: PageChangeEvent = {
-        pageIndex: 0,
-        pageSize: 50,
-        length: 25,
-      };
-      component.onPageChange(event);
-
-      expect(dispatchSpy).toHaveBeenCalledTimes(2);
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        changePageAction({ page: event.pageIndex, limit: event.pageSize })
-      );
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        deselectColumnAction({ name, columnType })
-      );
-    });
-  });
-
   describe("#onSortChange()", () => {
     it("should dispatch a sortByColumnAction", () => {
       dispatchSpy = spyOn(store, "dispatch");
@@ -459,16 +399,313 @@ describe("DatasetTableComponent", () => {
 
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        sortByColumnAction({ column, direction: event.direction })
+        sortByColumnAction({ column, direction: event.direction }),
       );
     });
   });
 
-  describe("#countDerivedDatasets()", () => {
-    xit("should return the number of derived datasets for a dataset", () => {
-      // const dataset = new Dataset();
-      // const numberOfDerivedDataset = component.countDerivedDatasets(dataset);
-      // expect(numberOfDerivedDataset).toEqual(0);
+  describe("#convertSavedColumns() with instrumentName", () => {
+    beforeEach(() => {
+      component.instruments = [
+        {
+          pid: "instrument1",
+          uniqueName: "unique1",
+          name: "Test Instrument 1",
+        },
+        {
+          pid: "instrument2",
+          uniqueName: "unique2",
+          name: "Test Instrument 2",
+        },
+        { pid: "instrument3", uniqueName: "unique3", name: "" },
+      ] as any[];
+
+      component.instrumentMap = new Map(
+        component.instruments.map((instrument) => [instrument.pid, instrument]),
+      );
+    });
+
+    it("should render instrument name when instrument is found", () => {
+      const columns = [
+        {
+          name: "instrumentName",
+          order: 0,
+          enabled: true,
+          width: 200,
+          type: "standard" as const,
+        },
+      ];
+
+      const convertedColumns = component.convertSavedColumns(columns);
+      const instrumentColumn = convertedColumns[0];
+
+      const mockRow = { instrumentId: "instrument1" };
+      const result = instrumentColumn.customRender(instrumentColumn, mockRow);
+
+      expect(result).toBe("Test Instrument 1");
+    });
+
+    it("should render instrumentId when instrument is not found", () => {
+      const columns = [
+        {
+          name: "instrumentName",
+          order: 0,
+          enabled: true,
+          width: 200,
+          type: "standard" as const,
+        },
+      ];
+
+      const convertedColumns = component.convertSavedColumns(columns);
+      const instrumentColumn = convertedColumns[0];
+
+      const mockRow = { instrumentId: "nonexistent" };
+      const result = instrumentColumn.customRender(instrumentColumn, mockRow);
+
+      expect(result).toBe("nonexistent");
+    });
+
+    it("should render '-' when instrumentId is not present", () => {
+      const columns = [
+        {
+          name: "instrumentName",
+          order: 0,
+          enabled: true,
+          width: 200,
+          type: "standard" as const,
+        },
+      ];
+
+      const convertedColumns = component.convertSavedColumns(columns);
+      const instrumentColumn = convertedColumns[0];
+
+      const mockRow = {};
+      const result = instrumentColumn.customRender(instrumentColumn, mockRow);
+
+      expect(result).toBe("-");
+    });
+
+    it("should render instrumentId when instrument has empty name", () => {
+      const columns = [
+        {
+          name: "instrumentName",
+          order: 0,
+          enabled: true,
+          width: 200,
+          type: "standard" as const,
+        },
+      ];
+
+      const convertedColumns = component.convertSavedColumns(columns);
+      const instrumentColumn = convertedColumns[0];
+
+      const mockRow = { instrumentId: "instrument3" };
+      const result = instrumentColumn.customRender(instrumentColumn, mockRow);
+
+      expect(result).toBe("instrument3");
+    });
+
+    it("should export instrument name when instrument is found", () => {
+      const columns = [
+        {
+          name: "instrumentName",
+          order: 0,
+          enabled: true,
+          width: 200,
+          type: "standard" as const,
+        },
+      ];
+
+      const convertedColumns = component.convertSavedColumns(columns);
+      const instrumentColumn = convertedColumns[0];
+
+      const mockRow = { instrumentId: "instrument2" };
+      const result = instrumentColumn.toExport(mockRow, instrumentColumn);
+
+      expect(result).toBe("Test Instrument 2");
+    });
+
+    it("should export instrumentId when instrument is not found", () => {
+      const columns = [
+        {
+          name: "instrumentName",
+          order: 0,
+          enabled: true,
+          width: 200,
+          type: "standard" as const,
+        },
+      ];
+
+      const convertedColumns = component.convertSavedColumns(columns);
+      const instrumentColumn = convertedColumns[0];
+
+      const mockRow = { instrumentId: "unknown-instrument" };
+      const result = instrumentColumn.toExport(mockRow, instrumentColumn);
+
+      expect(result).toBe("unknown-instrument");
+    });
+
+    it("should not affect other column types", () => {
+      const columns = [
+        {
+          name: "datasetName",
+          order: 0,
+          enabled: true,
+          width: 200,
+          type: "standard" as const,
+        },
+        {
+          name: "instrumentName",
+          order: 1,
+          enabled: true,
+          width: 200,
+          type: "standard" as const,
+        },
+      ];
+
+      const convertedColumns = component.convertSavedColumns(columns);
+
+      expect(convertedColumns.length).toBe(2);
+      expect(convertedColumns[0].name).toBe("datasetName");
+      expect(convertedColumns[0].customRender).toBeUndefined();
+      expect(convertedColumns[1].name).toBe("instrumentName");
+      expect(convertedColumns[1].customRender).toBeDefined();
+    });
+  });
+
+  describe("instruments subscription with Map optimization", () => {
+    it("should update both instruments array and instrumentMap when instruments observable changes", () => {
+      const mockInstruments = [
+        {
+          ...auditFields,
+          pid: "inst1",
+          uniqueName: "unique1",
+          name: "Instrument 1",
+        },
+        {
+          ...auditFields,
+          pid: "inst2",
+          uniqueName: "unique2",
+          name: "Instrument 2",
+        },
+      ];
+
+      component.instruments = mockInstruments;
+      component.instrumentMap = new Map(
+        mockInstruments.map((instrument) => [instrument.pid, instrument]),
+      );
+
+      expect(component.instruments).toEqual(mockInstruments);
+      expect(component.instrumentMap.size).toBe(2);
+      expect(component.instrumentMap.get("inst1")).toEqual(mockInstruments[0]);
+      expect(component.instrumentMap.get("inst2")).toEqual(mockInstruments[1]);
+    });
+
+    it("should handle empty instruments array and clear instrumentMap", () => {
+      component.instruments = [];
+      component.instrumentMap = new Map();
+
+      expect(component.instruments).toEqual([]);
+      expect(component.instrumentMap.size).toBe(0);
+    });
+
+    it("should provide O(1) lookup performance for instrument retrieval", () => {
+      const mockInstruments = [
+        {
+          ...auditFields,
+          pid: "fast-lookup",
+          uniqueName: "unique1",
+          name: "Fast Instrument",
+        },
+      ];
+
+      component.instrumentMap = new Map(
+        mockInstruments.map((instrument) => [instrument.pid, instrument]),
+      );
+
+      const foundInstrument = component.instrumentMap.get("fast-lookup");
+      expect(foundInstrument).toEqual(mockInstruments[0]);
+
+      const notFoundInstrument = component.instrumentMap.get("nonexistent");
+      expect(notFoundInstrument).toBeUndefined();
+    });
+  });
+
+  describe("#getInstrumentName() private method", () => {
+    beforeEach(() => {
+      const mockInstruments = [
+        {
+          ...auditFields,
+          pid: "inst1",
+          uniqueName: "unique1",
+          name: "Test Instrument 1",
+        },
+        {
+          ...auditFields,
+          pid: "inst2",
+          uniqueName: "unique2",
+          name: "Test Instrument 2",
+        },
+        { ...auditFields, pid: "inst3", uniqueName: "unique3", name: "" },
+      ];
+
+      component.instrumentMap = new Map(
+        mockInstruments.map((instrument) => [instrument.pid, instrument]),
+      );
+    });
+
+    it("should return instrument name when instrument is found", () => {
+      const mockRow = { instrumentId: "inst1" } as any;
+      const result = component["getInstrumentName"](mockRow);
+      expect(result).toBe("Test Instrument 1");
+    });
+
+    it("should return instrumentId when instrument is not found", () => {
+      const mockRow = { instrumentId: "nonexistent" } as any;
+      const result = component["getInstrumentName"](mockRow);
+      expect(result).toBe("nonexistent");
+    });
+
+    it("should return '-' when instrumentId is not present", () => {
+      const mockRow = {} as any;
+      const result = component["getInstrumentName"](mockRow);
+      expect(result).toBe("-");
+    });
+
+    it("should return instrumentId when instrument has empty name", () => {
+      const mockRow = { instrumentId: "inst3" } as any;
+      const result = component["getInstrumentName"](mockRow);
+      expect(result).toBe("inst3");
+    });
+
+    it("should handle undefined instrumentId gracefully", () => {
+      const mockRow = { instrumentId: undefined } as any;
+      const result = component["getInstrumentName"](mockRow);
+      expect(result).toBe("-");
+    });
+
+    it("should handle null instrumentId gracefully", () => {
+      const mockRow = { instrumentId: null } as any;
+      const result = component["getInstrumentName"](mockRow);
+      expect(result).toBe("-");
+    });
+
+    it("should handle empty string instrumentId gracefully", () => {
+      const mockRow = { instrumentId: "" } as any;
+      const result = component["getInstrumentName"](mockRow);
+      expect(result).toBe("-");
+    });
+
+    it("should return instrument name even when instrumentId is empty but instrument exists", () => {
+      // Add an instrument with empty string pid to test edge case
+      component.instrumentMap.set("", {
+        pid: "",
+        name: "Empty PID Instrument",
+      } as any);
+
+      const mockRow = { instrumentId: "" } as any;
+      const result = component["getInstrumentName"](mockRow);
+      expect(result).toBe("Empty PID Instrument");
     });
   });
 });

@@ -1,5 +1,8 @@
 import { Component, OnInit, OnChanges, SimpleChange } from "@angular/core";
-import { Dataset } from "shared/sdk";
+import {
+  HistoryClass,
+  OutputDatasetObsoleteDto,
+} from "@scicatproject/scicat-sdk-ts-angular";
 import {
   trigger,
   state,
@@ -22,6 +25,9 @@ export interface HistoryItem {
   [key: string]: any;
 }
 
+// unfortunately the index signature in HistoryClass is not exported by the openapi sdk generator
+export type HistoryWithProperties = HistoryClass & { [key: string]: unknown };
+
 @Component({
   selector: "dataset-lifecycle",
   templateUrl: "./dataset-lifecycle.component.html",
@@ -32,15 +38,16 @@ export interface HistoryItem {
       state("expanded", style({ height: "*" })),
       transition(
         "expanded <=> collapsed",
-        animate("225ms cubic-bezier(0.4, 0.0, 0.2, 1)")
+        animate("225ms cubic-bezier(0.4, 0.0, 0.2, 1)"),
       ),
     ]),
   ],
+  standalone: false,
 })
 export class DatasetLifecycleComponent implements OnInit, OnChanges {
   appConfig = this.appConfigService.getConfig();
 
-  dataset: Dataset | undefined;
+  dataset: OutputDatasetObsoleteDto | undefined;
   historyItems: HistoryItem[] = [];
 
   pageSizeOptions = [10, 25, 50, 100, 500, 1000];
@@ -55,28 +62,23 @@ export class DatasetLifecycleComponent implements OnInit, OnChanges {
   constructor(
     public appConfigService: AppConfigService,
     private datePipe: DatePipe,
-    private store: Store
+    private store: Store,
   ) {}
 
   private parseHistoryItems(): HistoryItem[] {
-    if (this.dataset && this.dataset.history) {
-      const history = this.dataset.history.map(
-        ({ updatedAt, updatedBy, id, ...properties }) =>
-          Object.keys(properties).map(
-            (property) =>
-              ({
-                property,
-                value: properties[property],
-                updatedBy: updatedBy.replace("ldap.", ""),
-                updatedAt: this.datePipe.transform(
-                  updatedAt,
-                  "yyyy-MM-dd HH:mm"
-                ),
-              } as HistoryItem)
-          )
+    const dataset = this.dataset;
+    if (dataset && dataset.history) {
+      const history = (dataset.history as HistoryWithProperties[]).map(
+        ({ updatedAt, updatedBy, id, _id, ...properties }) =>
+          Object.keys(properties).map((property) => ({
+            property,
+            value: properties[property],
+            updatedBy: updatedBy.replace("ldap.", ""),
+            updatedAt: this.datePipe.transform(updatedAt),
+          })),
       );
-      // flatten and reverse array before return
-      return ([] as HistoryItem[]).concat(...history).reverse();
+      // flatten array before return
+      return [].concat(...history).reverse();
     }
     return [];
   }
@@ -117,7 +119,7 @@ export class DatasetLifecycleComponent implements OnInit, OnChanges {
             }
           }
         })
-        .join(";")
+        .join(";"),
     );
     csv.unshift(header.join(";"));
     const csvArray = csv.join("\r\n");
@@ -140,7 +142,7 @@ export class DatasetLifecycleComponent implements OnInit, OnChanges {
     this.historyItems = this.parseHistoryItems();
     this.dataSource = this.historyItems.slice(
       this.currentPage,
-      this.itemsPerPage
+      this.itemsPerPage,
     );
     this.historyItemsCount = this.historyItems.length;
   }
@@ -152,7 +154,7 @@ export class DatasetLifecycleComponent implements OnInit, OnChanges {
         this.historyItems = this.parseHistoryItems();
         this.dataSource = this.historyItems.slice(
           this.currentPage,
-          this.itemsPerPage
+          this.itemsPerPage,
         );
         this.historyItemsCount = this.historyItems.length;
       }

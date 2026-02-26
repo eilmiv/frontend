@@ -1,0 +1,42 @@
+mat-card {
+  box-shadow: var(--theme-side-panel-shadow);
+  border: var(--theme-side-panel-border, 1px solid rgba(153, 213, 233, 0.7));
+  border-radius: 4px;
+  &.side-gap {
+    margin-right: 0.5rem;
+  }
+
+  .section-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 1.25rem;
+    font-weight: 425;
+    margin-bottom: 0.5rem;
+    position: relative;
+    margin-top: 1rem;
+
+    .proposal-filters-search-button {
+      width: 49%;
+      margin-left: 2%;
+    }
+
+    .proposal-filters-clear-all-button {
+      width: 49%;
+    }
+  }
+
+  .section-container:first-child {
+    margin-top: unset;
+  }
+}
+
+.small-btn {
+  position: absolute;
+  z-index: 10;
+  background: none;
+  top: 12px;
+  left: 12px;
+  scale: 0.9;
+  background: rgba($color: #000000, $alpha: 0.05);
+}

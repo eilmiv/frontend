@@ -5,22 +5,24 @@ import {
   Output,
   EventEmitter,
   Input,
-  OnChanges,
-  SimpleChange,
   ViewEncapsulation,
 } from "@angular/core";
-import { Dataset, TableColumn } from "state-management/models";
+import { TableColumn } from "state-management/models";
 import { MatCheckboxChange } from "@angular/material/checkbox";
-import { Subscription } from "rxjs";
+import { BehaviorSubject, Subscription, lastValueFrom, take } from "rxjs";
 import { Store } from "@ngrx/store";
 import {
   clearSelectionAction,
   selectDatasetAction,
   deselectDatasetAction,
   selectAllDatasetsAction,
-  changePageAction,
   sortByColumnAction,
+  setSearchTermsAction,
+  setTextFilterAction,
+  fetchFacetCountsAction,
+  fetchDatasetsAction,
 } from "state-management/actions/datasets.actions";
+import { fetchInstrumentsAction } from "state-management/actions/instruments.actions";
 
 import {
   selectDatasets,
@@ -29,66 +31,273 @@ import {
   selectTotalSets,
   selectDatasetsInBatch,
 } from "state-management/selectors/datasets.selectors";
-import { PageChangeEvent } from "shared/modules/table/table.component";
-import {
-  selectColumnAction,
-  deselectColumnAction,
-} from "state-management/actions/user.actions";
-import { get } from "lodash";
+import { get as lodashGet } from "lodash-es";
 import { AppConfigService } from "app-config.service";
+import {
+  selectColumnsWithHasFetchedSettings,
+  selectCurrentUser,
+} from "state-management/selectors/user.selectors";
+import {
+  DatasetClass,
+  OutputDatasetObsoleteDto,
+  Instrument,
+} from "@scicatproject/scicat-sdk-ts-angular";
+import { TableField } from "shared/modules/dynamic-material-table/models/table-field.model";
+import {
+  ITableSetting,
+  TableSettingEventType,
+} from "shared/modules/dynamic-material-table/models/table-setting.model";
+import {
+  TablePagination,
+  TablePaginationMode,
+} from "shared/modules/dynamic-material-table/models/table-pagination.model";
+import {
+  IRowEvent,
+  ITableEvent,
+  RowEventType,
+  TableEventType,
+  TableSelectionMode,
+} from "shared/modules/dynamic-material-table/models/table-row.model";
+import { updateUserSettingsAction } from "state-management/actions/user.actions";
+import { Sort } from "@angular/material/sort";
+import { ActivatedRoute } from "@angular/router";
+import { JsonHeadPipe } from "shared/pipes/json-head.pipe";
+import { DatePipe } from "@angular/common";
+import { FileSizePipe } from "shared/pipes/filesize.pipe";
+import { actionMenu } from "shared/modules/dynamic-material-table/utilizes/default-table-settings";
+import { TableConfigService } from "shared/services/table-config.service";
+import { selectInstruments } from "state-management/selectors/instruments.selectors";
+import { FormatNumberPipe } from "shared/pipes/format-number.pipe";
+
 export interface SortChangeEvent {
   active: string;
   direction: "asc" | "desc" | "";
 }
-
-// interface DatasetDerivationsMap {
-//   datasetPid: string;
-//   derivedDatasetsNum: number;
-// }
 
 @Component({
   selector: "dataset-table",
   templateUrl: "dataset-table.component.html",
   styleUrls: ["dataset-table.component.scss"],
   encapsulation: ViewEncapsulation.None,
+  standalone: false,
 })
-export class DatasetTableComponent implements OnInit, OnDestroy, OnChanges {
-  private inBatchPids: string[] = [];
+export class DatasetTableComponent implements OnInit, OnDestroy {
   private subscriptions: Subscription[] = [];
+  selectionIds: string[] = [];
 
   appConfig = this.appConfigService.getConfig();
-
-  lodashGet = get;
   currentPage$ = this.store.select(selectPage);
   datasetsPerPage$ = this.store.select(selectDatasetsPerPage);
   datasetCount$ = this.store.select(selectTotalSets);
+  currentUser$ = this.store.select(selectCurrentUser);
+  datasets$ = this.store.select(selectDatasets);
+  selectedDatasets$ = this.store.select(selectDatasetsInBatch);
+  selectColumnsWithFetchedSettings$ = this.store.select(
+    selectColumnsWithHasFetchedSettings,
+  );
+  instruments$ = this.store.select(selectInstruments);
 
-  @Input() tableColumns: TableColumn[] | null = null;
-  displayedColumns: string[] = [];
-  @Input() selectedSets: Dataset[] | null = null;
+  @Input() selectedSets: OutputDatasetObsoleteDto[] | null = null;
+  @Output() pageChange = new EventEmitter<{
+    pageIndex: number;
+    pageSize: number;
+  }>();
 
-  datasets: Dataset[] = [];
-  // datasetDerivationsMaps: DatasetDerivationsMap[] = [];
-  // derivationMapPids: string[] = [];
+  datasets: OutputDatasetObsoleteDto[] = [];
+  instruments: Instrument[] = [];
+  instrumentMap: Map<string, Instrument> = new Map();
 
-  @Output() settingsClick = new EventEmitter<MouseEvent>();
-  @Output() rowClick = new EventEmitter<Dataset>();
+  @Output() rowClick = new EventEmitter<OutputDatasetObsoleteDto>();
+  @Output() textSearch = new EventEmitter<string>();
+
+  tableDefaultSettingsConfig: ITableSetting = {
+    visibleActionMenu: actionMenu,
+    settingList: [
+      {
+        visibleActionMenu: actionMenu,
+        isDefaultSetting: true,
+        isCurrentSetting: true,
+        columnSetting: [],
+      },
+    ],
+    rowStyle: {
+      "border-bottom": "1px solid #d2d2d2",
+    },
+  };
+
+  tableName = "datasetsTable";
+
+  localization = "dataset";
+
+  columns: TableField<any>[];
+
+  pending = true;
+
+  setting: ITableSetting = {};
+
+  paginationMode: TablePaginationMode = "server-side";
+
+  dataSource: BehaviorSubject<OutputDatasetObsoleteDto[]> = new BehaviorSubject<
+    OutputDatasetObsoleteDto[]
+  >([]);
+
+  pagination: TablePagination = {};
+
+  rowSelectionMode: TableSelectionMode = "multi";
+
+  showGlobalTextSearch = false;
+
+  defaultPageSize = 10;
+
+  defaultPageSizeOptions = [5, 10, 25, 100];
+
+  tablesSettings: object;
+
+  globalTextSearch = "";
 
   constructor(
     public appConfigService: AppConfigService,
-    private store: Store
+    private store: Store,
+    private route: ActivatedRoute,
+    private jsonHeadPipe: JsonHeadPipe,
+    private datePipe: DatePipe,
+    private fileSize: FileSizePipe,
+    private tableConfigService: TableConfigService,
+    private formatNumberPipe: FormatNumberPipe,
   ) {}
-  doSettingsClick(event: MouseEvent) {
-    this.settingsClick.emit(event);
+
+  private getInstrumentName(row: OutputDatasetObsoleteDto): string {
+    const instrument = this.instrumentMap.get(row.instrumentId);
+    if (instrument?.name) {
+      return instrument.name;
+    }
+    if (row.instrumentId != null) {
+      return row.instrumentId === "" ? "-" : row.instrumentId;
+    }
+    return "-";
   }
 
-  doRowClick(dataset: Dataset): void {
-    this.rowClick.emit(dataset);
+  getTableSort(): ITableSetting["tableSort"] {
+    const { queryParams } = this.route.snapshot;
+
+    if (queryParams.sortDirection && queryParams.sortColumn) {
+      return {
+        sortColumn: queryParams.sortColumn,
+        sortDirection: queryParams.sortDirection,
+      };
+    }
+
+    return null;
+  }
+
+  getTablePaginationConfig(dataCount = 0): TablePagination {
+    const { queryParams } = this.route.snapshot;
+
+    const { skip = 0, limit = 25 } = JSON.parse(queryParams.args ?? "{}");
+
+    return {
+      pageSizeOptions: this.defaultPageSizeOptions,
+      pageIndex: skip / limit || 0,
+      pageSize: limit || this.defaultPageSize,
+      length: dataCount,
+    };
+  }
+
+  initTable(
+    settingConfig: ITableSetting,
+    paginationConfig: TablePagination,
+  ): void {
+    let currentColumnSetting = settingConfig.settingList.find(
+      (s) => s.isCurrentSetting,
+    )?.columnSetting;
+
+    if (!currentColumnSetting && settingConfig.settingList.length > 0) {
+      currentColumnSetting = settingConfig.settingList[0].columnSetting;
+    }
+
+    this.columns = currentColumnSetting;
+    this.setting = settingConfig;
+    this.pagination = paginationConfig;
+  }
+
+  saveTableSettings(setting: ITableSetting) {
+    this.pending = true;
+    const columnsSetting = setting.columnSetting.map((column, index) => {
+      const { name, display, width, type, format } = column;
+
+      return {
+        name,
+        enabled: !!(display === "visible"),
+        order: index,
+        width,
+        type,
+        format,
+      };
+    });
+    this.store.dispatch(
+      updateUserSettingsAction({
+        property: {
+          columns: columnsSetting,
+        },
+      }),
+    );
+
+    this.pending = false;
+  }
+
+  onSettingChange(event: {
+    type: TableSettingEventType;
+    setting: ITableSetting;
+  }) {
+    if (
+      event.type === TableSettingEventType.save ||
+      event.type === TableSettingEventType.create ||
+      event.type === TableSettingEventType.reset
+    ) {
+      this.saveTableSettings(event.setting);
+    }
+  }
+
+  onRowEvent({ event, sender }: IRowEvent<OutputDatasetObsoleteDto>) {
+    if (event === RowEventType.RowClick) {
+      const dataset = sender.row;
+      this.rowClick.emit(dataset);
+    } else if (event === RowEventType.RowSelectionChange) {
+      const dataset = sender.row;
+      if (sender.checked) {
+        this.store.dispatch(selectDatasetAction({ dataset }));
+      } else {
+        this.store.dispatch(deselectDatasetAction({ dataset }));
+      }
+    } else if (event === RowEventType.MasterSelectionChange) {
+      if (sender.checked) {
+        this.store.dispatch(selectAllDatasetsAction());
+      } else {
+        this.store.dispatch(clearSelectionAction());
+      }
+    }
+  }
+
+  onTableEvent({ event, sender }: ITableEvent) {
+    if (event === TableEventType.SortChanged) {
+      const { active, direction } = sender as Sort;
+
+      const column = active;
+
+      this.store.dispatch(sortByColumnAction({ column, direction }));
+    }
+  }
+
+  onPageChange({ pageIndex, pageSize }: TablePagination) {
+    this.pageChange.emit({
+      pageIndex,
+      pageSize,
+    });
   }
 
   // conditional to asses dataset status and assign correct icon ArchViewMode.work_in_progress
   // TODO: when these concepts stabilise, we should move the definitions to site config
-  wipCondition(dataset: Dataset): boolean {
+  wipCondition(dataset: DatasetClass): boolean {
     if (
       !dataset.datasetlifecycle.archivable &&
       !dataset.datasetlifecycle.retrievable &&
@@ -102,7 +311,7 @@ export class DatasetTableComponent implements OnInit, OnDestroy, OnChanges {
     return false;
   }
 
-  systemErrorCondition(dataset: Dataset): boolean {
+  systemErrorCondition(dataset: DatasetClass): boolean {
     if (
       (dataset.datasetlifecycle.retrievable &&
         dataset.datasetlifecycle.archivable) ||
@@ -116,14 +325,14 @@ export class DatasetTableComponent implements OnInit, OnDestroy, OnChanges {
     return false;
   }
 
-  userErrorCondition(dataset: Dataset): boolean {
+  userErrorCondition(dataset: DatasetClass): boolean {
     if (dataset.datasetlifecycle.archiveStatusMessage === "missingFilesError") {
       return true;
     }
     return false;
   }
 
-  archivableCondition(dataset: Dataset): boolean {
+  archivableCondition(dataset: DatasetClass): boolean {
     if (
       dataset.datasetlifecycle.archivable &&
       !dataset.datasetlifecycle.retrievable &&
@@ -134,7 +343,7 @@ export class DatasetTableComponent implements OnInit, OnDestroy, OnChanges {
     return false;
   }
 
-  retrievableCondition(dataset: Dataset): boolean {
+  retrievableCondition(dataset: DatasetClass): boolean {
     if (
       !dataset.datasetlifecycle.archivable &&
       dataset.datasetlifecycle.retrievable
@@ -144,24 +353,11 @@ export class DatasetTableComponent implements OnInit, OnDestroy, OnChanges {
     return false;
   }
 
-  isSelected(dataset: Dataset): boolean {
-    if (!this.selectedSets) {
-      return false;
-    }
-    return this.selectedSets.map((set) => set.pid).indexOf(dataset.pid) !== -1;
-  }
+  // isInBatch(dataset: DatasetClass): boolean {
+  //   return this.inBatchPids.indexOf(dataset.pid) !== -1;
+  // }
 
-  isAllSelected(): boolean {
-    const numSelected = this.selectedSets ? this.selectedSets.length : 0;
-    const numRows = this.datasets ? this.datasets.length : 0;
-    return numSelected === numRows;
-  }
-
-  isInBatch(dataset: Dataset): boolean {
-    return this.inBatchPids.indexOf(dataset.pid) !== -1;
-  }
-
-  onSelect(event: MatCheckboxChange, dataset: Dataset): void {
+  onSelect(event: MatCheckboxChange, dataset: OutputDatasetObsoleteDto): void {
     if (event.checked) {
       this.store.dispatch(selectDatasetAction({ dataset }));
     } else {
@@ -177,85 +373,235 @@ export class DatasetTableComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  onPageChange(event: PageChangeEvent): void {
-    this.store.dispatch(
-      changePageAction({ page: event.pageIndex, limit: event.pageSize })
-    );
-    if (event.pageSize < 50) {
-      this.store.dispatch(
-        selectColumnAction({ name: "image", columnType: "standard" })
-      );
-    } else {
-      this.store.dispatch(
-        deselectColumnAction({ name: "image", columnType: "standard" })
-      );
-    }
-  }
-
   onSortChange(event: SortChangeEvent): void {
     const { active, direction } = event;
     const column = active.split("_")[1];
     this.store.dispatch(sortByColumnAction({ column, direction }));
   }
 
-  // countDerivedDatasets(dataset: Dataset): number {
-  //   let derivedDatasetsNum = 0;
-  //   if (dataset.history) {
-  //     dataset.history.forEach(item => {
-  //       if (
-  //         item.hasOwnProperty("derivedDataset") &&
-  //         this.datasets.map(set => set.pid).includes(item.derivedDataset.pid)
-  //       ) {
-  //         derivedDatasetsNum++;
-  //       }
-  //     });
-  //   }
-  //   return derivedDatasetsNum;
-  // }
+  convertSavedColumns(columns: TableColumn[]): TableField<any>[] {
+    return columns
+      .filter((column) => column.name !== "select")
+      .map((column) => {
+        const convertedColumn: TableField<any> = {
+          name: column.name,
+          header: column.header,
+          index: column.order,
+          display: column.enabled ? "visible" : "hidden",
+          width: column.width,
+          type: column.type,
+          format: column.format,
+          tooltip: column.tooltip,
+        };
+
+        // NOTE: This is how we render the custom columns if new config is used.
+        if (column.type === "custom") {
+          convertedColumn.customRender = (c, row) =>
+            lodashGet(row, column.path || column.name);
+          convertedColumn.toExport = (row) =>
+            lodashGet(row, column.path || column.name);
+        }
+
+        if (column.name === "size") {
+          convertedColumn.customRender = (column, row) =>
+            this.fileSize.transform(row[column.name]);
+          convertedColumn.toExport = (row) =>
+            this.fileSize.transform(row[column.name]);
+        }
+
+        if (column.name === "creationTime") {
+          convertedColumn.customRender = (column, row) =>
+            this.datePipe.transform(row[column.name]);
+          convertedColumn.toExport = (row) =>
+            this.datePipe.transform(row[column.name]);
+        }
+
+        if (
+          column.name === "metadata" ||
+          column.name === "scientificMetadata"
+        ) {
+          convertedColumn.customRender = (column, row) => {
+            // NOTE: Maybe here we should use the "scientificMetadata" as field name and not "metadata". This should be changed in the backend config.
+            return this.jsonHeadPipe.transform(row["scientificMetadata"]);
+          };
+          convertedColumn.toExport = (row) => {
+            return this.jsonHeadPipe.transform(row["scientificMetadata"]);
+          };
+        }
+
+        if (column.name === "dataStatus") {
+          convertedColumn.renderContentIcon = (column, row) => {
+            if (this.wipCondition(row)) {
+              return "hourglass_empty";
+            } else if (this.archivableCondition(row)) {
+              return "archive";
+            } else if (this.retrievableCondition(row)) {
+              return "archive";
+            } else if (this.systemErrorCondition(row)) {
+              return "error_outline";
+            } else if (this.userErrorCondition(row)) {
+              return "error_outline";
+            }
+
+            return "";
+          };
+
+          convertedColumn.customRender = (column, row) => {
+            if (this.wipCondition(row)) {
+              return "Work in progress";
+            } else if (this.archivableCondition(row)) {
+              return "Archivable";
+            } else if (this.retrievableCondition(row)) {
+              return "Retrievable";
+            } else if (this.systemErrorCondition(row)) {
+              return "System error";
+            } else if (this.userErrorCondition(row)) {
+              return "User error";
+            }
+
+            return "";
+          };
+
+          convertedColumn.toExport = (row) => {
+            if (this.wipCondition(row)) {
+              return "Work in progress";
+            } else if (this.archivableCondition(row)) {
+              return "Archivable";
+            } else if (this.retrievableCondition(row)) {
+              return "Retrievable";
+            } else if (this.systemErrorCondition(row)) {
+              return "System error";
+            } else if (this.userErrorCondition(row)) {
+              return "User error";
+            }
+
+            return "";
+          };
+        }
+
+        if (column.name === "image") {
+          convertedColumn.renderImage = true;
+          convertedColumn.sort = "none";
+        }
+
+        if (column.name === "instrumentName") {
+          convertedColumn.customRender = (column, row) =>
+            this.getInstrumentName(row);
+          convertedColumn.toExport = (row, column) =>
+            this.getInstrumentName(row);
+        }
+
+        if (column.name.startsWith("scientificMetadata.")) {
+          convertedColumn.customRender = (col, row) => {
+            return String(
+              this.formatNumberPipe.transform(lodashGet(row, col.name)),
+            );
+          };
+          convertedColumn.toExport = (row) => {
+            return String(
+              this.formatNumberPipe.transform(lodashGet(row, column.name)),
+            );
+          };
+        }
+
+        return convertedColumn;
+      });
+  }
 
   ngOnInit() {
+    this.store.dispatch(fetchInstrumentsAction({ limit: 1000, skip: 0 }));
+
     this.subscriptions.push(
-      this.store.select(selectDatasetsInBatch).subscribe((datasets) => {
-        this.inBatchPids = datasets.map((dataset) => {
+      this.selectedDatasets$.subscribe((datasets) => {
+        // NOTE: In the selectionIds we are storing either _id or pid. Dynamic material table works only with these two.
+        this.selectionIds = datasets.map((dataset) => {
           return dataset.pid;
         });
-      })
+      }),
     );
 
-    if (this.tableColumns) {
-      this.displayedColumns = this.tableColumns
-        .filter((column) => column.enabled)
-        .map((column) => {
-          return column.type + "_" + column.name;
-        });
-    }
+    this.subscriptions.push(
+      this.instruments$.subscribe((instruments) => {
+        this.instruments = instruments;
+        this.instrumentMap = new Map(
+          instruments.map((instrument) => [instrument.pid, instrument]),
+        );
+      }),
+    );
 
     this.subscriptions.push(
-      this.store.select(selectDatasets).subscribe((datasets) => {
-        this.datasets = datasets;
+      this.datasets$.subscribe((datasets) => {
+        this.currentUser$.subscribe((currentUser) => {
+          this.datasetCount$.subscribe(async (count) => {
+            const defaultTableColumns = await lastValueFrom(
+              this.selectColumnsWithFetchedSettings$.pipe(take(1)),
+            );
 
-        // this.derivationMapPids = this.datasetDerivationsMaps.map(
-        //   datasetderivationMap => datasetderivationMap.datasetPid
-        // );
-        // this.datasetDerivationsMaps = datasets
-        //   .filter(({ pid }) => !this.derivationMapPids.includes(pid))
-        //   .map(dataset => ({
-        //     datasetPid: dataset.pid,
-        //     derivedDatasetsNum: this.countDerivedDatasets(dataset)
-        //   }));
-      })
+            if (
+              defaultTableColumns.hasFetchedSettings &&
+              defaultTableColumns.columns.length
+            ) {
+              const userConfigColumns = defaultTableColumns.columns;
+
+              if (!currentUser) {
+                this.rowSelectionMode = "none";
+              } else {
+                this.rowSelectionMode = "multi";
+              }
+
+              if (userConfigColumns) {
+                this.dataSource.next(datasets);
+                this.pending = false;
+
+                const tableSort = this.getTableSort();
+                const paginationConfig = this.getTablePaginationConfig(count);
+
+                const defaultConfigColumns =
+                  this.appConfig?.defaultDatasetsListSettings?.columns;
+
+                const userTableConfigColumns =
+                  this.convertSavedColumns(userConfigColumns);
+
+                this.tableDefaultSettingsConfig.settingList[0].columnSetting =
+                  this.convertSavedColumns(
+                    defaultConfigColumns as TableColumn[],
+                  );
+
+                const tableSettingsConfig =
+                  this.tableConfigService.getTableSettingsConfig(
+                    this.tableName,
+                    this.tableDefaultSettingsConfig,
+                    userTableConfigColumns,
+                    tableSort,
+                  );
+
+                if (tableSettingsConfig?.settingList.length) {
+                  this.initTable(tableSettingsConfig, paginationConfig);
+                }
+              }
+            }
+          });
+        });
+      }),
+    );
+
+    this.subscriptions.push(
+      this.route.queryParams.subscribe((queryParams) => {
+        const searchQuery = JSON.parse(queryParams.searchQuery || "{}");
+        this.globalTextSearch = searchQuery.text || "";
+      }),
     );
   }
 
-  ngOnChanges(changes: { [propKey: string]: SimpleChange }) {
-    for (const propName in changes) {
-      if (propName === "tableColumns") {
-        this.tableColumns = changes[propName].currentValue;
-        this.displayedColumns = changes[propName].currentValue
-          .filter((column: TableColumn) => column.enabled)
-          .map((column: TableColumn) => column.type + "_" + column.name);
-      }
-    }
+  onTextSearchChange(term: string) {
+    this.globalTextSearch = term;
+    this.store.dispatch(setSearchTermsAction({ terms: term }));
+    this.store.dispatch(setTextFilterAction({ text: term }));
+  }
+
+  onTextSearchAction() {
+    this.store.dispatch(fetchDatasetsAction());
+    this.store.dispatch(fetchFacetCountsAction());
   }
 
   ngOnDestroy() {

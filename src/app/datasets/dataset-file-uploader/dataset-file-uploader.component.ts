@@ -6,7 +6,12 @@ import {
   PickedFile,
   SubmitCaptionEvent,
 } from "shared/modules/file-uploader/file-uploader.component";
-import { Attachment, Dataset, User } from "shared/sdk";
+import {
+  Attachment,
+  OutputAttachmentV3Dto,
+  OutputDatasetObsoleteDto,
+  ReturnedUserDto,
+} from "@scicatproject/scicat-sdk-ts-angular";
 import { OwnershipService } from "shared/services/ownership.service";
 import {
   addAttachmentAction,
@@ -23,17 +28,20 @@ import { selectCurrentUser } from "state-management/selectors/user.selectors";
   selector: "app-dataset-file-uploader",
   templateUrl: "./dataset-file-uploader.component.html",
   styleUrls: ["./dataset-file-uploader.component.scss"],
+  standalone: false,
 })
 export class DatasetFileUploaderComponent implements OnInit, OnDestroy {
-  attachments: Attachment[] = [];
+  attachments: OutputAttachmentV3Dto[] = [];
   subscriptions: Subscription[] = [];
-  attachment: Partial<Attachment> = {};
-  dataset: Dataset | undefined;
-  user: User | undefined;
+  attachment: Partial<OutputAttachmentV3Dto> = {};
+  dataset: OutputDatasetObsoleteDto | undefined;
+  user: ReturnedUserDto | undefined;
+  isOwner: boolean;
+
   constructor(
     private store: Store,
     private ownershipService: OwnershipService,
-    private router: Router
+    private router: Router,
   ) {}
 
   ngOnInit(): void {
@@ -41,25 +49,25 @@ export class DatasetFileUploaderComponent implements OnInit, OnDestroy {
       this.store.select(selectCurrentDataset).subscribe((dataset) => {
         if (dataset) {
           this.dataset = dataset;
-          this.ownershipService.checkDatasetAccess(
+          this.isOwner = this.ownershipService.checkDatasetAccess(
             dataset,
             this.store,
-            this.router
+            this.router,
           );
         }
-      })
+      }),
     );
     this.subscriptions.push(
       this.store.select(selectCurrentUser).subscribe((user) => {
         if (user) {
           this.user = user;
         }
-      })
+      }),
     );
     this.subscriptions.push(
       this.store.select(selectCurrentAttachments).subscribe((attachments) => {
         this.attachments = attachments;
-      })
+      }),
     );
   }
   onFileUploaderFilePicked(file: PickedFile) {
@@ -82,14 +90,15 @@ export class DatasetFileUploaderComponent implements OnInit, OnDestroy {
           datasetId: this.dataset.pid,
           attachmentId: event.attachmentId,
           caption: event.caption,
-        })
+          ownerGroup: this.dataset.ownerGroup,
+        }),
       );
     }
   }
   deleteAttachment(attachmentId: string) {
     if (this.dataset) {
       this.store.dispatch(
-        removeAttachmentAction({ datasetId: this.dataset.pid, attachmentId })
+        removeAttachmentAction({ datasetId: this.dataset.pid, attachmentId }),
       );
     }
   }

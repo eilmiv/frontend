@@ -6,6 +6,7 @@
 /out-tsc
 # Only exists if Bazel was run
 /bazel-out
+@scicatproject/
 
 # dependencies
 /node_modules
@@ -50,5 +51,13 @@ Thumbs.db
 # Cypress
 /cypress/screenshots/*
 /cypress/videos/*
+/cypress/downloads/*
 *.mp4
 .angular
+
+# karma
+karma-junit.xml
+
+# config files overrides
+config.override.json
+config.override.*.json

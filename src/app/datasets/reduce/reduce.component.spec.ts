@@ -3,21 +3,20 @@ import {
   ComponentFixture,
   TestBed,
   inject,
-  waitForAsync
+  waitForAsync,
 } from "@angular/core/testing";
 import { Store, StoreModule } from "@ngrx/store";
 
 import { ReduceComponent } from "./reduce.component";
-import { MockStore } from "shared/MockStubs";
+import { MockStore, createMock, mockDataset } from "shared/MockStubs";
 
 import { Router } from "@angular/router";
 import { BrowserAnimationsModule } from "@angular/platform-browser/animations";
 import { provideMockStore } from "@ngrx/store/testing";
 import {
   selectOpenwhiskResult,
-  selectDatasets
+  selectDatasets,
 } from "state-management/selectors/datasets.selectors";
-import { Dataset } from "shared/sdk";
 import { reduceDatasetAction } from "state-management/actions/datasets.actions";
 import { FormBuilder } from "@angular/forms";
 import { MatButtonModule } from "@angular/material/button";
@@ -29,13 +28,14 @@ import { MatStepperModule } from "@angular/material/stepper";
 import { MatTableModule } from "@angular/material/table";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatOptionModule } from "@angular/material/core";
+import { DatasetClass } from "@scicatproject/scicat-sdk-ts-angular";
 
 describe("ReduceComponent", () => {
   let component: ReduceComponent;
   let fixture: ComponentFixture<ReduceComponent>;
 
   const router = {
-    navigateByUrl: jasmine.createSpy("navigateByUrl")
+    navigateByUrl: jasmine.createSpy("navigateByUrl"),
   };
   let store: MockStore;
   let dispatchSpy;
@@ -54,23 +54,23 @@ describe("ReduceComponent", () => {
         MatSelectModule,
         MatStepperModule,
         MatTableModule,
-        StoreModule.forRoot({})
+        StoreModule.forRoot({}),
       ],
       providers: [
         FormBuilder,
         provideMockStore({
           selectors: [
             { selector: selectOpenwhiskResult, value: {} },
-            { selector: selectDatasets, value: [] }
-          ]
-        })
+            { selector: selectDatasets, value: [] },
+          ],
+        }),
       ],
-      declarations: [ReduceComponent]
+      declarations: [ReduceComponent],
     });
     TestBed.overrideComponent(ReduceComponent, {
       set: {
-        providers: [{ provide: Router, useValue: router }]
-      }
+        providers: [{ provide: Router, useValue: router }],
+      },
     });
     TestBed.compileComponents();
   }));
@@ -97,25 +97,25 @@ describe("ReduceComponent", () => {
     it("should dispatch a reduceDatasetAction", () => {
       dispatchSpy = spyOn(store, "dispatch");
 
-      const dataset = new Dataset();
+      const dataset = mockDataset;
 
       component.reduceDataset(dataset);
 
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       expect(dispatchSpy).toHaveBeenCalledWith(
-        reduceDatasetAction({ dataset })
+        reduceDatasetAction({ dataset }),
       );
     });
   });
 
   describe("#onRowClick()", () => {
     it("should navigate to a dataset", () => {
-      const dataset = new Dataset();
+      const dataset = createMock<DatasetClass>({});
       component.onRowClick(dataset);
 
       expect(router.navigateByUrl).toHaveBeenCalledTimes(1);
       expect(router.navigateByUrl).toHaveBeenCalledWith(
-        "/datasets/" + encodeURIComponent(dataset.pid)
+        "/datasets/" + encodeURIComponent(dataset.pid),
       );
     });
   });
